@@ -197,12 +197,9 @@ export default function LoginPage() {
         <div className="maisLoginScenic">
           <div className="maisLoginFlightPath" />
           <div className="maisLoginPlane" aria-hidden="true">✈</div>
-          <img
-            className="maisLoginMonument"
-            src="/icon.png"
-            alt=""
-            aria-hidden="true"
-          />
+          <div className="maisLoginMonument" aria-hidden="true">
+            <BrandLogo className="maisLoginMonumentLogo" />
+          </div>
 
           <div className="maisLoginDestination">
             <div className="maisLoginDestinationIcon">◎</div>
