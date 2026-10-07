@@ -2,8 +2,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Whats BS Manager",
-  description: "Gerenciamento de WhatsApp Business"
+  title: "Mais Chat",
+  description: "Central de atendimento da Mais Viagens"
 };
 
 const themeBootstrap = `
