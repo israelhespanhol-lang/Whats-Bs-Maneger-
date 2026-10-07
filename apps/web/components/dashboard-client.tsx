@@ -113,7 +113,7 @@ export default function DashboardClient() {
   const [userName, setUserName] = useState("Usuário");
   const [account, setAccount] = useState<WhatsAppAccount | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);\n  const [draft, setDraft] = useState("");\n  const [sending, setSending] = useState(false);
 
   const selected = useMemo(
     () => conversations.find((item) => item.id === selectedId) ?? conversations[0] ?? null,
@@ -287,6 +287,36 @@ export default function DashboardClient() {
     };
   }, [selectedId, loadMessages]);
 
+  async function sendMessage() {
+    if (!selected || !draft.trim() || sending) return;
+
+    setSending(true);
+    setError(null);
+
+    const text = draft.trim();
+    const { error: sendError } = await supabase.functions.invoke("whatsapp-send", {
+      body: {
+        conversationId: selected.id,
+        text
+      }
+    });
+
+    if (sendError) {
+      setError(
+        "Não foi possível enviar. Verifique a conexão do WhatsApp e a janela de atendimento."
+      );
+      setSending(false);
+      return;
+    }
+
+    setDraft("");
+    await loadMessages(selected.id);
+    if (membership) {
+      await loadConversations(membership.organization_id);
+    }
+    setSending(false);
+  }
+
   async function signOut() {
     await supabase.auth.signOut();
     router.replace("/login");
@@ -344,7 +374,7 @@ export default function DashboardClient() {
           <button className="navItem">Contatos</button>
           <button className="navItem">Campanhas</button>
           <button className="navItem">Templates</button>
-          <button className="navItem">Relatórios</button>
+          <button className="navItem">Relatórios</button>\n          <a className="navItem" href="/settings/whatsapp">Configurações</a>
         </nav>
 
         <div className="sidebarFooter">
@@ -490,16 +520,37 @@ export default function DashboardClient() {
             </div>
 
             <footer className={`composer ${connected ? "" : "composerLocked"}`}>
-              <button disabled={!connected}>＋</button>
+              <button disabled={!connected || sending}>＋</button>
               <input
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void sendMessage();
+                  }
+                }}
                 placeholder={
-                  connected
-                    ? "Digite uma mensagem..."
-                    : "Conecte o WhatsApp para enviar mensagens"
+                  !connected
+                    ? "Conecte o WhatsApp para enviar mensagens"
+                    : windowText === "Janela encerrada"
+                      ? "Janela encerrada — use um template aprovado"
+                      : "Digite uma mensagem..."
                 }
-                disabled={!connected}
+                disabled={!connected || sending || windowText === "Janela encerrada"}
               />
-              <button className="send" disabled={!connected}>➤</button>
+              <button
+                className="send"
+                onClick={() => void sendMessage()}
+                disabled={
+                  !connected ||
+                  sending ||
+                  !draft.trim() ||
+                  windowText === "Janela encerrada"
+                }
+              >
+                {sending ? "…" : "➤"}
+              </button>
             </footer>
           </>
         ) : (
