@@ -24,7 +24,7 @@ export default function Home() {
           <button className="navItem">Contatos</button>
           <button className="navItem">Campanhas</button>
           <button className="navItem">Templates</button>
-          <button className="navItem">Relatórios</button>
+          <button className="navItem">Relatórios</button>\n          <a className="navItem" href="/login">Acesso</a>
         </nav>
 
         <div className="sidebarFooter">
