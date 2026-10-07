@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import rawBody from "@fastify/raw-body";
+import rawBody from "fastify-raw-body";
 import {
   createContact,
   hasDatabaseConfig,
