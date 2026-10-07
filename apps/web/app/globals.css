@@ -2477,3 +2477,98 @@ h1 {
     margin-bottom: 22px;
   }
 }
+
+
+/* =========================================================
+   Mais Chat — final generated scenic background integration
+   ========================================================= */
+
+.maisLoginScenic {
+  background: #03110f !important;
+  isolation: isolate;
+}
+
+.maisLoginScenicImage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center 51%;
+  filter: saturate(1.06) contrast(1.02) brightness(0.94);
+  transform: scale(1.002);
+}
+
+.maisLoginScenic::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      to bottom,
+      #03110f 0%,
+      rgba(3, 17, 15, 0.96) 7%,
+      rgba(3, 17, 15, 0.72) 15%,
+      rgba(3, 17, 15, 0.28) 27%,
+      rgba(3, 17, 15, 0.03) 43%
+    ),
+    linear-gradient(
+      to right,
+      rgba(2, 15, 13, 0.22) 0%,
+      transparent 52%,
+      rgba(2, 15, 13, 0.08) 100%
+    );
+}
+
+.maisLoginScenic::after {
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(0deg, rgba(1, 9, 8, 0.24), transparent 42%),
+    linear-gradient(90deg, rgba(2, 17, 15, 0.12), transparent 52%);
+}
+
+.maisLoginFlightPath {
+  z-index: 4;
+}
+
+.maisLoginPlane {
+  z-index: 5;
+}
+
+.maisLoginDestination {
+  z-index: 6;
+}
+
+/* The generated scene already contains the large Mais Viagens M. */
+.maisLoginMonument,
+.maisLoginMonumentLogo {
+  display: none !important;
+}
+
+@media (min-width: 981px) {
+  .maisLoginScenic {
+    height: min(45vh, 465px);
+    min-height: 365px;
+  }
+
+  .maisLoginScenicImage {
+    object-position: center 52%;
+  }
+}
+
+@media (max-width: 980px) {
+  .maisLoginScenicImage {
+    object-position: 44% center;
+  }
+}
+
+@media (max-width: 640px) {
+  .maisLoginScenicImage {
+    object-position: 42% center;
+  }
+}
