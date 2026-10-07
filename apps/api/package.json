@@ -11,8 +11,8 @@
   },
   "dependencies": {
     "@fastify/cors": "latest",
-    "@fastify/raw-body": "latest",
     "fastify": "latest",
+    "fastify-raw-body": "latest",
     "pg": "latest"
   },
   "devDependencies": {
