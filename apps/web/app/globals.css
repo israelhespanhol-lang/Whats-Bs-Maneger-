@@ -1010,3 +1010,38 @@ h1 {
     justify-items: center;
   }
 }
+
+
+.messageState {
+  margin: auto;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.mediaPlaceholder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.outgoing small {
+  color: color-mix(in srgb, var(--text-soft) 80%, var(--accent-strong));
+}
+
+.composer button:disabled,
+.composer input:disabled {
+  cursor: not-allowed;
+}
+
+.composerLocked .send {
+  background: var(--surface-soft);
+  color: var(--text-muted);
+}
+
+.connection:not(.disconnected) i {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.1);
+}
