@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import ThemeToggle from "../../components/theme-toggle";
+import BrandLogo from "../../components/brand-logo";
 import { supabase } from "../../lib/supabase";
 
 export default function LoginPage() {
@@ -59,20 +60,16 @@ export default function LoginPage() {
   return (
     <main className="authPage">
       <section className="authBrandPanel">
-        <div className="authBrand">
-          <div className="brandMark">W</div>
-          <div>
-            <strong>Whats BS</strong>
-            <span>Manager</span>
-          </div>
+        <div className="authBrand authBrandWithLogo">
+          <BrandLogo className="authBrandLogo" />
+          <span className="productName authProductName">Mais Chat</span>
         </div>
 
         <div className="authHeroCopy">
           <p className="eyebrow">MULTIATENDIMENTO</p>
-          <h1>Seu WhatsApp organizado em uma única operação.</h1>
+          <h1>Seu Atendimento da Mais Viagens em uma única operação.</h1>
           <p>
-            Conversas, contatos, campanhas e automações com controle de acesso
-            por empresa.
+            Conversas, contatos, campanhas e automações em uma experiência centralizada da Mais Viagens.
           </p>
         </div>
 
@@ -88,7 +85,7 @@ export default function LoginPage() {
               {mode === "login" ? "ACESSO SEGURO" : "CRIAR CONTA"}
             </p>
             <h2>
-              {mode === "login" ? "Entrar no Whats Manager" : "Criar seu acesso"}
+              {mode === "login" ? "Entrar no Mais Chat" : "Criar seu acesso"}
             </h2>
             <p>
               {mode === "login"
