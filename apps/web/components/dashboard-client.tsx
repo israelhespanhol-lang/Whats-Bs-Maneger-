@@ -113,7 +113,9 @@ export default function DashboardClient() {
   const [userName, setUserName] = useState("Usuário");
   const [account, setAccount] = useState<WhatsAppAccount | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [messagesLoading, setMessagesLoading] = useState(false);\n  const [draft, setDraft] = useState("");\n  const [sending, setSending] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
 
   const selected = useMemo(
     () => conversations.find((item) => item.id === selectedId) ?? conversations[0] ?? null,
@@ -374,7 +376,8 @@ export default function DashboardClient() {
           <button className="navItem">Contatos</button>
           <button className="navItem">Campanhas</button>
           <button className="navItem">Templates</button>
-          <button className="navItem">Relatórios</button>\n          <a className="navItem" href="/settings/whatsapp">Configurações</a>
+          <button className="navItem">Relatórios</button>
+          <a className="navItem" href="/settings/whatsapp">Configurações</a>
         </nav>
 
         <div className="sidebarFooter">
