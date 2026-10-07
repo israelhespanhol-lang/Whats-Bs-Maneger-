@@ -1,3 +1,5 @@
+import ThemeToggle from "../components/theme-toggle";
+
 const conversations = [
   { name: "Maria Silva", message: "Quero saber mais sobre os valores", unread: 2, time: "15:42" },
   { name: "Carlos Souza", message: "Obrigado!", unread: 0, time: "15:18" },
@@ -25,9 +27,12 @@ export default function Home() {
           <button className="navItem">Relatórios</button>
         </nav>
 
-        <div className="connection">
-          <i />
-          WhatsApp conectado
+        <div className="sidebarFooter">
+          <ThemeToggle />
+          <div className="connection">
+            <i />
+            WhatsApp conectado
+          </div>
         </div>
       </aside>
 
@@ -78,7 +83,7 @@ export default function Home() {
             </div>
           </div>
           <div className="chatActions">
-            <button>🔍</button>
+            <button>⌕</button>
             <button>⋯</button>
           </div>
         </header>
