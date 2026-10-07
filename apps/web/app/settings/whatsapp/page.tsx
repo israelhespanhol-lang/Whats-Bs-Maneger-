@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import ThemeToggle from "../../../components/theme-toggle";
+import BrandLogo from "../../../components/brand-logo";
 import { supabase } from "../../../lib/supabase";
 
 type Account = {
@@ -170,10 +171,10 @@ export default function WhatsAppSettingsPage() {
     <main className="settingsPage">
       <header className="settingsTopbar">
         <a className="settingsBack" href="/">← Voltar</a>
-        <div className="settingsBrand">
-          <div className="brandMark">W</div>
+        <div className="settingsBrand settingsBrandWithLogo">
+          <BrandLogo className="settingsBrandLogo" />
           <div>
-            <strong>Whats BS Manager</strong>
+            <strong>Mais Chat</strong>
             <span>Configuração do WhatsApp</span>
           </div>
         </div>
