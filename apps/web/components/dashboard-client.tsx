@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ThemeToggle from "./theme-toggle";
+import BrandLogo from "./brand-logo";
 import { supabase } from "../lib/supabase";
 
 type Membership = {
@@ -328,8 +329,8 @@ export default function DashboardClient() {
     return (
       <main className="statePage">
         <div className="stateCard">
-          <div className="brandMark">W</div>
-          <h1>Carregando...</h1>
+          <BrandLogo className="loadingBrandLogo" />
+          <h1>Carregando o Mais Chat...</h1>
           <p>Validando sessão e organização.</p>
         </div>
       </main>
@@ -361,12 +362,9 @@ export default function DashboardClient() {
   return (
     <main className="appShell">
       <aside className="sidebar">
-        <div className="brand">
-          <div className="brandMark">W</div>
-          <div>
-            <strong>Whats BS</strong>
-            <span>{organization?.name ?? "Manager"}</span>
-          </div>
+        <div className="brand brandWithLogo">
+          <BrandLogo className="brandLogo" />
+          <span className="productName">Mais Chat</span>
         </div>
 
         <nav>
@@ -598,7 +596,7 @@ export default function DashboardClient() {
             <div className="infoBlock">
               <span className="sectionLabel">ORGANIZAÇÃO</span>
               <div className="windowCard">
-                <strong>{organization?.name ?? "Whats Manager"}</strong>
+                <strong>{organization?.name ?? "Mais Viagens"}</strong>
                 <span>Dados isolados por tenant</span>
               </div>
             </div>
