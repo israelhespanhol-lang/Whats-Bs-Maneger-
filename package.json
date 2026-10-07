@@ -1,0 +1,14 @@
+{
+  "name": "whats-bs-manager",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w @whats-manager/web",
+    "dev:api": "npm run dev -w @whats-manager/api",
+    "build": "npm run build -ws --if-present",
+    "typecheck": "npm run typecheck -ws --if-present"
+  }
+}
