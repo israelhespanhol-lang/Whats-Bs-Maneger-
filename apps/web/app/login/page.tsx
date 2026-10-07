@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import BrandLogo from "../../components/brand-logo";
+import { maisChatSceneDataUrl } from "../../lib/mais-chat-bg";
 import { supabase } from "../../lib/supabase";
 
 type FeatureKind = "chat" | "people" | "campaign" | "automation";
@@ -195,12 +196,14 @@ export default function LoginPage() {
         </div>
 
         <div className="maisLoginScenic">
+          <img
+            className="maisLoginScenicImage"
+            src={maisChatSceneDataUrl}
+            alt=""
+            aria-hidden="true"
+          />
           <div className="maisLoginFlightPath" />
           <div className="maisLoginPlane" aria-hidden="true">✈</div>
-          <div className="maisLoginMonument" aria-hidden="true">
-            <BrandLogo className="maisLoginMonumentLogo" />
-          </div>
-
           <div className="maisLoginDestination">
             <div className="maisLoginDestinationIcon">◎</div>
             <p>
