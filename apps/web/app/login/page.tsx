@@ -71,6 +71,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [microsoftLoading, setMicrosoftLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
 
@@ -97,6 +98,26 @@ export default function LoginPage() {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loginWithGoogle() {
+    setGoogleLoading(true);
+    setMessage(null);
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo:
+          typeof window !== "undefined"
+            ? `${window.location.origin}/`
+            : undefined
+      }
+    });
+
+    if (error) {
+      setMessage(error.message);
+      setGoogleLoading(false);
     }
   }
 
@@ -318,20 +339,32 @@ export default function LoginPage() {
           <span />
         </div>
 
-        <button
-          className="loginV2Microsoft"
-          type="button"
-          onClick={() => void loginWithMicrosoft()}
-          disabled={microsoftLoading}
-        >
-          <span className="loginV2MicrosoftLogo" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-            <i />
-          </span>
-          {microsoftLoading ? "Conectando..." : "Entrar com Microsoft"}
-        </button>
+        <div className="loginV2Socials">
+          <button
+            className="loginV2Google"
+            type="button"
+            onClick={() => void loginWithGoogle()}
+            disabled={googleLoading}
+          >
+            <span className="loginV2GoogleLogo" aria-hidden="true">G</span>
+            {googleLoading ? "Conectando..." : "Entrar com Google"}
+          </button>
+
+          <button
+            className="loginV2Microsoft"
+            type="button"
+            onClick={() => void loginWithMicrosoft()}
+            disabled={microsoftLoading}
+          >
+            <span className="loginV2MicrosoftLogo" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+              <i />
+            </span>
+            {microsoftLoading ? "Conectando..." : "Entrar com Microsoft"}
+          </button>
+        </div>
       </section>
     </main>
   );
