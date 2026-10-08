@@ -146,24 +146,33 @@ export default function DashboardClient() {
     });
   }, []);
 
-  const loadMessages = useCallback(async (conversationId: string) => {
-    setMessagesLoading(true);
+  const loadMessages = useCallback(
+    async (conversationId: string, options?: { background?: boolean }) => {
+      const background = options?.background ?? false;
 
-    const { data: rows, error: messageError } = await supabase
-      .from("messages")
-      .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at")
-      .eq("conversation_id", conversationId)
-      .order("created_at", { ascending: true })
-      .limit(500);
+      if (!background) {
+        setMessagesLoading(true);
+      }
 
-    if (messageError) {
-      setError(messageError.message);
-    } else {
-      setMessages((rows ?? []) as Message[]);
-    }
+      const { data: rows, error: messageError } = await supabase
+        .from("messages")
+        .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: true })
+        .limit(500);
 
-    setMessagesLoading(false);
-  }, []);
+      if (messageError) {
+        setError(messageError.message);
+      } else {
+        setMessages((rows ?? []) as Message[]);
+      }
+
+      if (!background) {
+        setMessagesLoading(false);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     let active = true;
@@ -280,7 +289,7 @@ export default function DashboardClient() {
           filter: `conversation_id=eq.${selectedId}`
         },
         () => {
-          void loadMessages(selectedId);
+          void loadMessages(selectedId, { background: true });
         }
       )
       .subscribe();
@@ -313,7 +322,7 @@ export default function DashboardClient() {
     }
 
     setDraft("");
-    await loadMessages(selected.id);
+    await loadMessages(selected.id, { background: true });
     if (membership) {
       await loadConversations(membership.organization_id);
     }
@@ -479,7 +488,7 @@ export default function DashboardClient() {
             </header>
 
             <div className="messages">
-              {messagesLoading ? (
+              {messagesLoading && messages.length === 0 ? (
                 <div className="messageState">Carregando mensagens...</div>
               ) : messages.length === 0 ? (
                 <div className="emptyMessages">
