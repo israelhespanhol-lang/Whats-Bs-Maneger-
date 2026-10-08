@@ -461,13 +461,16 @@ h1 {
 }
 
 .bubble {
-  max-width: 66%;
-  padding: 11px 13px 8px;
+  width: fit-content;
+  min-width: 72px;
+  max-width: min(68%, 680px);
+  padding: 9px 12px 7px;
   border-radius: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   box-shadow: 0 1px 2px var(--shadow);
   font-size: 13px;
-  line-height: 1.45;
+  line-height: 1.42;
+  overflow-wrap: anywhere;
 }
 
 .bubble small {
@@ -475,7 +478,8 @@ h1 {
   text-align: right;
   color: var(--text-soft);
   font-size: 9px;
-  margin-top: 6px;
+  margin-top: 4px;
+  white-space: nowrap;
 }
 
 .incoming {
