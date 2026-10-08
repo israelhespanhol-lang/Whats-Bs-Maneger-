@@ -236,8 +236,8 @@ export default function LoginPage() {
       </div>
 
       <section className="loginV2Card">
-        <div className="loginV2CardBrand">
-          <img src="/icon.png" alt="" aria-hidden="true" />
+        <div className="loginV2CardBrand" aria-hidden="true">
+          <BrandLogo className="loginV2CardLogo" alt="" />
         </div>
 
         <header>
