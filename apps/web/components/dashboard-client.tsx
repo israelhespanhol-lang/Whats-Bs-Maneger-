@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ThemeToggle from "./theme-toggle";
 import BrandLogo from "./brand-logo";
@@ -38,6 +38,7 @@ type Message = {
   sent_at: string | null;
   delivered_at: string | null;
   read_at: string | null;
+  optimistic?: boolean;
 };
 
 type WhatsAppAccount = {
@@ -104,6 +105,37 @@ function windowRemaining(expiresAt: string | null) {
   return `${hours}h ${minutes}min restantes`;
 }
 
+function sortMessages(items: Message[]) {
+  return [...items].sort(
+    (a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+}
+
+function upsertMessage(items: Message[], incoming: Message) {
+  const index = items.findIndex((item) => item.id === incoming.id);
+
+  if (index === -1) {
+    return sortMessages([...items, incoming]);
+  }
+
+  const next = [...items];
+  next[index] = { ...next[index], ...incoming, optimistic: false };
+  return sortMessages(next);
+}
+
+function sortConversations(items: Conversation[]) {
+  return [...items].sort((a, b) => {
+    const aTime = a.last_message_at
+      ? new Date(a.last_message_at).getTime()
+      : 0;
+    const bTime = b.last_message_at
+      ? new Date(b.last_message_at).getTime()
+      : 0;
+    return bTime - aTime;
+  });
+}
+
 export default function DashboardClient() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -117,6 +149,10 @@ export default function DashboardClient() {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const selectedIdRef = useRef<string | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const shouldAutoScrollRef = useRef(true);
 
   const selected = useMemo(
     () => conversations.find((item) => item.id === selectedId) ?? conversations[0] ?? null,
@@ -141,8 +177,12 @@ export default function DashboardClient() {
     const typedRows = (rows ?? []) as Conversation[];
     setConversations(typedRows);
     setSelectedId((current) => {
-      if (current && typedRows.some((row) => row.id === current)) return current;
-      return typedRows[0]?.id ?? null;
+      const next =
+        current && typedRows.some((row) => row.id === current)
+          ? current
+          : typedRows[0]?.id ?? null;
+      selectedIdRef.current = next;
+      return next;
     });
   }, []);
 
@@ -158,16 +198,16 @@ export default function DashboardClient() {
         .from("messages")
         .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at")
         .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true })
+        .order("created_at", { ascending: false })
         .limit(500);
 
       if (messageError) {
         setError(messageError.message);
-      } else {
-        setMessages((rows ?? []) as Message[]);
+      } else if (selectedIdRef.current === conversationId) {
+        setMessages([...(rows ?? [])].reverse() as Message[]);
       }
 
-      if (!background) {
+      if (!background && selectedIdRef.current === conversationId) {
         setMessagesLoading(false);
       }
     },
@@ -236,6 +276,23 @@ export default function DashboardClient() {
   }, [loadConversations, router]);
 
   useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (!messages.length || !shouldAutoScrollRef.current) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: messagesLoading ? "auto" : "smooth",
+        block: "end"
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages, messagesLoading]);
+
+  useEffect(() => {
     if (!membership) return;
 
     const channel = supabase
@@ -248,8 +305,58 @@ export default function DashboardClient() {
           table: "conversations",
           filter: `organization_id=eq.${membership.organization_id}`
         },
-        () => {
-          void loadConversations(membership.organization_id);
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            const removedId = (payload.old as { id?: string })?.id;
+            if (removedId) {
+              setConversations((current) =>
+                current.filter((item) => item.id !== removedId)
+              );
+            }
+            return;
+          }
+
+          const changed = payload.new as Partial<Conversation> & { id?: string };
+          if (!changed.id) return;
+
+          let known = false;
+          setConversations((current) => {
+            const index = current.findIndex((item) => item.id === changed.id);
+            if (index === -1) return current;
+
+            known = true;
+            const next = [...current];
+            const isOpen = selectedIdRef.current === changed.id;
+
+            next[index] = {
+              ...next[index],
+              status: changed.status ?? next[index].status,
+              unread_count: isOpen
+                ? 0
+                : changed.unread_count ?? next[index].unread_count,
+              last_message_at:
+                changed.last_message_at ?? next[index].last_message_at,
+              customer_service_window_expires_at:
+                changed.customer_service_window_expires_at ??
+                next[index].customer_service_window_expires_at
+            };
+
+            return sortConversations(next);
+          });
+
+          if (!known || payload.eventType === "INSERT") {
+            void loadConversations(membership.organization_id);
+          }
+
+          if (
+            selectedIdRef.current === changed.id &&
+            (changed.unread_count ?? 0) > 0
+          ) {
+            void supabase
+              .from("conversations")
+              .update({ unread_count: 0 })
+              .eq("id", changed.id);
+          }
         }
       )
       .subscribe();
@@ -265,6 +372,9 @@ export default function DashboardClient() {
       return;
     }
 
+    selectedIdRef.current = selectedId;
+    shouldAutoScrollRef.current = true;
+    setMessages([]);
     void loadMessages(selectedId);
 
     void supabase
@@ -288,8 +398,29 @@ export default function DashboardClient() {
           table: "messages",
           filter: `conversation_id=eq.${selectedId}`
         },
-        () => {
-          void loadMessages(selectedId, { background: true });
+        (payload) => {
+          if (selectedIdRef.current !== selectedId) return;
+
+          if (payload.eventType === "INSERT") {
+            const incoming = payload.new as Message;
+            setMessages((current) => upsertMessage(current, incoming));
+            return;
+          }
+
+          if (payload.eventType === "UPDATE") {
+            const incoming = payload.new as Message;
+            setMessages((current) => upsertMessage(current, incoming));
+            return;
+          }
+
+          if (payload.eventType === "DELETE") {
+            const removedId = (payload.old as { id?: string })?.id;
+            if (removedId) {
+              setMessages((current) =>
+                current.filter((message) => message.id !== removedId)
+              );
+            }
+          }
         }
       )
       .subscribe();
@@ -306,14 +437,42 @@ export default function DashboardClient() {
     setError(null);
 
     const text = draft.trim();
-    const { error: sendError } = await supabase.functions.invoke("whatsapp-send", {
-      body: {
-        conversationId: selected.id,
-        text
-      }
-    });
+    const optimisticId = `optimistic-${crypto.randomUUID()}`;
+    const optimisticMessage: Message = {
+      id: optimisticId,
+      direction: "OUTBOUND",
+      message_type: "text",
+      body: text,
+      status: "PENDING",
+      created_at: new Date().toISOString(),
+      sent_at: null,
+      delivered_at: null,
+      read_at: null,
+      optimistic: true
+    };
 
-    if (sendError) {
+    shouldAutoScrollRef.current = true;
+    setDraft("");
+    setMessages((current) => upsertMessage(current, optimisticMessage));
+
+    const { data, error: sendError } = await supabase.functions.invoke(
+      "whatsapp-send",
+      {
+        body: {
+          conversationId: selected.id,
+          text
+        }
+      }
+    );
+
+    if (sendError || !data?.message) {
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === optimisticId
+            ? { ...message, status: "FAILED", optimistic: false }
+            : message
+        )
+      );
       setError(
         "Não foi possível enviar. Verifique a conexão do WhatsApp e a janela de atendimento."
       );
@@ -321,11 +480,14 @@ export default function DashboardClient() {
       return;
     }
 
-    setDraft("");
-    await loadMessages(selected.id, { background: true });
-    if (membership) {
-      await loadConversations(membership.organization_id);
-    }
+    const persisted = data.message as Message;
+    setMessages((current) => {
+      const withoutOptimistic = current.filter(
+        (message) => message.id !== optimisticId
+      );
+      return upsertMessage(withoutOptimistic, persisted);
+    });
+
     setSending(false);
   }
 
@@ -446,7 +608,11 @@ export default function DashboardClient() {
                   type="button"
                   className={`conversationItem conversationButton ${selected?.id === item.id ? "selected" : ""}`}
                   key={item.id}
-                  onClick={() => setSelectedId(item.id)}
+                  onClick={() => {
+                    selectedIdRef.current = item.id;
+                    shouldAutoScrollRef.current = true;
+                    setSelectedId(item.id);
+                  }}
                 >
                   <div className="avatar">
                     {initials(itemContact?.name ?? null, itemContact?.phone_e164 ?? "")}
@@ -487,7 +653,18 @@ export default function DashboardClient() {
               </div>
             </header>
 
-            <div className="messages">
+            <div
+              className="messages"
+              ref={messagesContainerRef}
+              onScroll={(event) => {
+                const element = event.currentTarget;
+                const distanceFromBottom =
+                  element.scrollHeight -
+                  element.scrollTop -
+                  element.clientHeight;
+                shouldAutoScrollRef.current = distanceFromBottom < 140;
+              }}
+            >
               {messagesLoading && messages.length === 0 ? (
                 <div className="messageState">Carregando mensagens...</div>
               ) : messages.length === 0 ? (
@@ -525,6 +702,7 @@ export default function DashboardClient() {
                       </small>
                     </div>
                   ))}
+                  <div ref={messagesEndRef} aria-hidden="true" />
                 </>
               )}
             </div>
