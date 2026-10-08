@@ -3,17 +3,17 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import BrandLogo from "../../components/brand-logo";
-import { maisChatSceneDataUrl } from "../../lib/mais-chat-bg";
+import ThemeToggle from "../../components/theme-toggle";
 import { supabase } from "../../lib/supabase";
 
-type FeatureKind = "chat" | "people" | "campaign" | "automation";
+type FeatureKind = "chat" | "people" | "chart";
 
 function FeatureIcon({ kind }: { kind: FeatureKind }) {
   if (kind === "chat") {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M7 18.5 3.5 20l1.1-3.7A7.5 7.5 0 1 1 7 18.5Z" />
-        <path d="M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01" />
+        <path d="M7 18.4 3.7 20l1-3.6A7.7 7.7 0 1 1 7 18.4Z" />
+        <path d="M8.4 11.6h.01M12 11.6h.01M15.6 11.6h.01" />
       </svg>
     );
   }
@@ -22,27 +22,44 @@ function FeatureIcon({ kind }: { kind: FeatureKind }) {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="9" cy="8" r="3" />
-        <path d="M3.5 19v-1.2c0-2.7 2.4-4.8 5.5-4.8s5.5 2.1 5.5 4.8V19" />
-        <circle cx="17" cy="9" r="2.3" />
-        <path d="M15.5 14c2.9.2 5 1.8 5 4.1V19" />
-      </svg>
-    );
-  }
-
-  if (kind === "campaign") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 13V9h4l8-4v12l-8-4H4Z" />
-        <path d="m8 13 1.2 5h2.4l-1.4-4.2M19 8.5c1 .8 1.5 1.9 1.5 3s-.5 2.2-1.5 3" />
+        <path d="M3.7 19v-1.2C3.7 15 6 13 9 13s5.3 2 5.3 4.8V19" />
+        <circle cx="17" cy="9" r="2.2" />
+        <path d="M15.7 14c2.8.2 4.8 1.8 4.8 4.1V19" />
       </svg>
     );
   }
 
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2.8v2M12 19.2v2M2.8 12h2M19.2 12h2M5.5 5.5l1.4 1.4M17.1 17.1l1.4 1.4M18.5 5.5l-1.4 1.4M6.9 17.1l-1.4 1.4" />
-      <circle cx="12" cy="12" r="7" />
+      <path d="M5 19V11M12 19V5M19 19v-8" />
+      <path d="M3 19h18" />
+    </svg>
+  );
+}
+
+function MailIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m4 7 8 6 8-6" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="5" y="10" width="14" height="10" rx="2" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z" />
+      <circle cx="12" cy="12" r="2.4" />
     </svg>
   );
 }
@@ -51,11 +68,10 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  const [microsoftLoading, setMicrosoftLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -84,13 +100,14 @@ export default function LoginPage() {
     }
   }
 
-  async function loginWithGoogle() {
-    setGoogleLoading(true);
+  async function loginWithMicrosoft() {
+    setMicrosoftLoading(true);
     setMessage(null);
 
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
+      provider: "azure",
       options: {
+        scopes: "email",
         redirectTo:
           typeof window !== "undefined"
             ? `${window.location.origin}/`
@@ -100,7 +117,7 @@ export default function LoginPage() {
 
     if (error) {
       setMessage(error.message);
-      setGoogleLoading(false);
+      setMicrosoftLoading(false);
     }
   }
 
@@ -135,206 +152,186 @@ export default function LoginPage() {
   }> = [
     {
       kind: "chat",
-      title: "Conversas",
-      description: "em um só lugar"
+      title: "Todas as conversas",
+      description: "Em um só lugar."
     },
     {
       kind: "people",
-      title: "Gestão de",
-      description: "contatos"
+      title: "Mais produtividade",
+      description: "Para o seu time."
     },
     {
-      kind: "campaign",
-      title: "Campanhas",
-      description: "mais eficientes"
-    },
-    {
-      kind: "automation",
-      title: "Automações",
-      description: "que ampliam seus resultados"
+      kind: "chart",
+      title: "Resultados que viajam",
+      description: "Junto com o seu negócio."
     }
   ];
 
   return (
-    <main className="maisLoginPage">
-      <section className="maisLoginHero">
-        <div className="maisLoginHeroGlow" />
+    <main className="loginV2">
+      <div className="loginV2Scenery" aria-hidden="true" />
+      <div className="loginV2SceneryShade" aria-hidden="true" />
+      <div className="loginV2Arc loginV2ArcTop" aria-hidden="true" />
+      <div className="loginV2Arc loginV2ArcBottom" aria-hidden="true" />
+      <div className="loginV2GlowOrb" aria-hidden="true" />
 
-        <div className="maisLoginBrand">
-          <BrandLogo className="maisLoginBrandLogo" />
-          <span>MAIS CHAT</span>
+      <header className="loginV2Topbar">
+        <div className="loginV2Brand">
+          <BrandLogo className="loginV2BrandLogo" />
+          <span className="loginV2BrandDivider" />
+          <strong>Mais Chat</strong>
         </div>
 
-        <div className="maisLoginCopy">
-          <p className="maisLoginKicker">MULTIATENDIMENTO</p>
-          <h1>
-            Seu Atendimento
-            <br />
-            da Mais Viagens
-            <br />
-            em uma única
-            <br />
-            operação.
-          </h1>
-          <p className="maisLoginDescription">
-            Conversas, contatos, campanhas e automações
-            <br className="maisDesktopBreak" />
-            em uma experiência centralizada da Mais Viagens.
-          </p>
+        <div className="loginV2Theme">
+          <ThemeToggle />
+        </div>
+      </header>
 
-          <div className="maisLoginFeatures">
-            {features.map((feature) => (
-              <div className="maisLoginFeature" key={feature.kind}>
-                <div className="maisLoginFeatureIcon">
-                  <FeatureIcon kind={feature.kind} />
-                </div>
+      <section className="loginV2Hero">
+        <div className="loginV2Eyebrow">
+          <span>MULTIATENDIMENTO</span>
+          <i />
+        </div>
+
+        <h1>
+          Seu Atendimento
+          <br />
+          da <em>Mais Viagens</em>
+          <br />
+          em uma única
+          <br />
+          operação.
+        </h1>
+
+        <p className="loginV2Description">
+          Conversas, contatos, campanhas e automações
+          <br />
+          em uma experiência centralizada da Mais Viagens.
+        </p>
+
+        <div className="loginV2Features">
+          {features.map((feature) => (
+            <div className="loginV2Feature" key={feature.kind}>
+              <div className="loginV2FeatureIcon">
+                <FeatureIcon kind={feature.kind} />
+              </div>
+              <div>
                 <strong>{feature.title}</strong>
                 <span>{feature.description}</span>
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="maisLoginScenic">
-          <img
-            className="maisLoginScenicImage"
-            src={maisChatSceneDataUrl}
-            alt=""
-            aria-hidden="true"
-          />
-          <div className="maisLoginFlightPath" />
-          <div className="maisLoginPlane" aria-hidden="true">✈</div>
-          <div className="maisLoginDestination">
-            <div className="maisLoginDestinationIcon">◎</div>
-            <p>
-              Mais tecnologia para conectar
-              <br />
-              pessoas a <strong>novos destinos.</strong>
-            </p>
-          </div>
+            </div>
+          ))}
         </div>
       </section>
 
-      <section className="maisLoginAccess">
-        <div className="maisLoginCard">
-          <div className="maisLoginCardBrand">
-            <BrandLogo className="maisLoginCardLogo" />
-            <span>MAIS CHAT</span>
-          </div>
+      <div className="loginV2Tagline">
+        <i />
+        <p>
+          TECNOLOGIA
+          <br />
+          QUE APROXIMA
+          <br />
+          DESTINOS
+        </p>
+      </div>
 
-          <header className="maisLoginCardHeader">
-            <h2>Bem-vindo de volta</h2>
-            <p>
-              Acesse sua conta para continuar no
-              <br />
-              Mais Chat.
-            </p>
-          </header>
+      <section className="loginV2Card">
+        <div className="loginV2CardBrand">
+          <img src="/icon.png" alt="" aria-hidden="true" />
+        </div>
 
-          <form className="maisLoginForm" onSubmit={submit}>
-            <label>
-              <span>E-mail</span>
-              <div className="maisLoginInput">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <rect x="3" y="5" width="18" height="14" rx="2" />
-                  <path d="m4 7 8 6 8-6" />
-                </svg>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="seu@email.com"
-                  required
-                  autoComplete="email"
-                />
-              </div>
-            </label>
+        <header>
+          <h2>Acesse o Mais Chat</h2>
+          <p>
+            Entre com suas credenciais para continuar
+            <br />
+            e oferecer o melhor atendimento.
+          </p>
+        </header>
 
-            <label>
-              <span>Senha</span>
-              <div className="maisLoginInput">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <rect x="5" y="10" width="14" height="10" rx="2" />
-                  <path d="M8 10V7a4 4 0 0 1 8 0v3" />
-                </svg>
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Sua senha"
-                  minLength={6}
-                  required
-                  autoComplete="current-password"
-                />
-                <button
-                  className="maisLoginEye"
-                  type="button"
-                  onClick={() => setShowPassword((current) => !current)}
-                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z" />
-                    <circle cx="12" cy="12" r="2.4" />
-                  </svg>
-                </button>
-              </div>
-            </label>
+        <form className="loginV2Form" onSubmit={submit}>
+          <label>
+            <span>E-mail</span>
+            <div className="loginV2Input">
+              <MailIcon />
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="seu@email.com"
+                required
+                autoComplete="email"
+              />
+            </div>
+          </label>
 
-            <div className="maisLoginOptions">
-              <label className="maisLoginRemember">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(event) => setRemember(event.target.checked)}
-                />
-                <span>Lembrar de mim</span>
-              </label>
-
+          <label>
+            <span>Senha</span>
+            <div className="loginV2Input">
+              <LockIcon />
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Sua senha"
+                minLength={6}
+                required
+                autoComplete="current-password"
+              />
               <button
+                className="loginV2Eye"
                 type="button"
-                className="maisLoginLink"
-                onClick={() => void resetPassword()}
-                disabled={resetLoading}
+                onClick={() => setShowPassword((current) => !current)}
+                aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
               >
-                {resetLoading ? "Enviando..." : "Esqueceu a senha?"}
+                <EyeIcon />
               </button>
             </div>
+          </label>
 
-            {message && <div className="maisLoginMessage">{message}</div>}
-
+          <div className="loginV2ForgotRow">
             <button
-              className="maisLoginPrimary"
-              type="submit"
-              disabled={loading}
+              type="button"
+              className="loginV2Link"
+              onClick={() => void resetPassword()}
+              disabled={resetLoading}
             >
-              <span>{loading ? "Entrando..." : "Entrar no Mais Chat"}</span>
-              {!loading && <b>→</b>}
+              {resetLoading ? "Enviando..." : "Esqueceu a senha?"}
             </button>
-          </form>
-
-          <div className="maisLoginDivider">
-            <span />
-            <small>ou</small>
-            <span />
           </div>
 
-          <button
-            className="maisLoginGoogle"
-            type="button"
-            onClick={() => void loginWithGoogle()}
-            disabled={googleLoading}
-          >
-            <span className="maisGoogleG">G</span>
-            {googleLoading ? "Conectando..." : "Entrar com o Google"}
-          </button>
+          {message && <div className="loginV2Message">{message}</div>}
 
-          <footer className="maisLoginCardFooter">
-            <span>Ainda não tem uma conta?</span>
-            <a href="mailto:contato@maisviagens.com.br">
-              Fale com o time comercial
-            </a>
-          </footer>
+          <button
+            className="loginV2Primary"
+            type="submit"
+            disabled={loading}
+          >
+            <span>{loading ? "Entrando..." : "Entrar no Mais Chat"}</span>
+            {!loading && <b>→</b>}
+          </button>
+        </form>
+
+        <div className="loginV2Divider">
+          <span />
+          <small>ou</small>
+          <span />
         </div>
+
+        <button
+          className="loginV2Microsoft"
+          type="button"
+          onClick={() => void loginWithMicrosoft()}
+          disabled={microsoftLoading}
+        >
+          <span className="loginV2MicrosoftLogo" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+          {microsoftLoading ? "Conectando..." : "Entrar com Microsoft"}
+        </button>
       </section>
     </main>
   );
