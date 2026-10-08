@@ -3493,3 +3493,49 @@ h1 {
     margin-bottom: 24px;
   }
 }
+
+
+/* Mais Chat — Google as the only social sign-in */
+.loginV2Google {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid rgba(134, 184, 171, 0.34);
+  border-radius: 8px;
+  background: rgba(45, 79, 68, 0.36);
+  color: #f0f5f3;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.loginV2Google:hover:not(:disabled) {
+  border-color: rgba(135, 210, 191, 0.5);
+  background: rgba(51, 91, 77, 0.44);
+}
+
+.loginV2Google:disabled {
+  opacity: 0.62;
+  cursor: wait;
+}
+
+.loginV2GoogleLogo {
+  font-size: 17px;
+  line-height: 1;
+  font-weight: 900;
+  background: conic-gradient(
+    from -45deg,
+    #4285f4 0 24%,
+    #34a853 24% 45%,
+    #fbbc05 45% 67%,
+    #ea4335 67% 82%,
+    #4285f4 82% 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
