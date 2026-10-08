@@ -170,7 +170,7 @@ export default function WhatsAppSettingsPage() {
   return (
     <main className="settingsPage">
       <header className="settingsTopbar">
-        <a className="settingsBack" href="/">← Voltar</a>
+        <a className="settingsBack" href="/settings">← Configurações</a>
         <div className="settingsBrand settingsBrandWithLogo">
           <BrandLogo className="settingsBrandLogo" />
           <div>
