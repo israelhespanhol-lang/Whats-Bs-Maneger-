@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import ThemeToggle from "./theme-toggle";
 import BrandLogo from "./brand-logo";
+import AppSidebar from "./app-sidebar";
 import { supabase } from "../lib/supabase";
 
 type Membership = {
@@ -532,41 +532,15 @@ export default function DashboardClient() {
 
   return (
     <main className="appShell">
-      <aside className="sidebar">
-        <div className="brand brandWithLogo">
-          <BrandLogo className="brandLogo" />
-          <span className="productName">Mais Chat</span>
-        </div>
-
-        <nav>
-          <button className="navItem active">
-            Conversas <span>{unread}</span>
-          </button>
-          <button className="navItem">Contatos</button>
-          <button className="navItem">Campanhas</button>
-          <button className="navItem">Templates</button>
-          <button className="navItem">Relatórios</button>
-          <a className="navItem" href="/settings/whatsapp">Configurações</a>
-        </nav>
-
-        <div className="sidebarFooter">
-          <ThemeToggle />
-          <div className="sidebarUser">
-            <div className="miniAvatar">{initials(userName, "")}</div>
-            <div>
-              <strong>{userName}</strong>
-              <span>{membership.role}</span>
-            </div>
-            <button onClick={signOut} title="Sair">↗</button>
-          </div>
-          <div className={`connection ${connected ? "" : "disconnected"}`}>
-            <i />
-            {connected
-              ? account?.display_phone_number || "WhatsApp conectado"
-              : "WhatsApp não conectado"}
-          </div>
-        </div>
-      </aside>
+      <AppSidebar
+        active="conversations"
+        unread={unread}
+        userName={userName}
+        role={membership.role}
+        connected={connected}
+        displayPhoneNumber={account?.display_phone_number}
+        onSignOut={() => void signOut()}
+      />
 
       <section className="conversationList">
         <header>
