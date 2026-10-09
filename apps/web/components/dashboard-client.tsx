@@ -368,16 +368,13 @@ export default function DashboardClient() {
 
             known = true;
             const next = [...current];
-            const isOpen = selectedIdRef.current === changed.id;
-
             next[index] = {
               ...next[index],
               assigned_member_id:
                 changed.assigned_member_id ?? next[index].assigned_member_id,
               status: changed.status ?? next[index].status,
-              unread_count: isOpen
-                ? 0
-                : changed.unread_count ?? next[index].unread_count,
+              unread_count:
+                changed.unread_count ?? next[index].unread_count,
               last_message_at:
                 changed.last_message_at ?? next[index].last_message_at,
               customer_service_window_expires_at:
@@ -392,15 +389,6 @@ export default function DashboardClient() {
             void loadConversations(membership.organization_id);
           }
 
-          if (
-            selectedIdRef.current === changed.id &&
-            (changed.unread_count ?? 0) > 0
-          ) {
-            void supabase
-              .from("conversations")
-              .update({ unread_count: 0 })
-              .eq("id", changed.id);
-          }
         }
       )
       .subscribe();
@@ -421,16 +409,6 @@ export default function DashboardClient() {
     setMessages([]);
     void loadMessages(selectedId);
 
-    void supabase
-      .from("conversations")
-      .update({ unread_count: 0 })
-      .eq("id", selectedId);
-
-    setConversations((current) =>
-      current.map((item) =>
-        item.id === selectedId ? { ...item, unread_count: 0 } : item
-      )
-    );
 
     const channel = supabase
       .channel(`messages:${selectedId}`)
@@ -533,6 +511,35 @@ export default function DashboardClient() {
     });
 
     setSending(false);
+  }
+
+  async function markConversationRead() {
+    if (!selected || selected.unread_count <= 0) return;
+
+    const conversationId = selected.id;
+    const previousUnread = selected.unread_count;
+
+    setConversations((current) =>
+      current.map((item) =>
+        item.id === conversationId ? { ...item, unread_count: 0 } : item
+      )
+    );
+
+    const { error: readError } = await supabase
+      .from("conversations")
+      .update({ unread_count: 0 })
+      .eq("id", conversationId);
+
+    if (readError) {
+      setConversations((current) =>
+        current.map((item) =>
+          item.id === conversationId
+            ? { ...item, unread_count: previousUnread }
+            : item
+        )
+      );
+      setError(readError.message);
+    }
   }
 
   async function updateAssignment(assignToMe: boolean) {
@@ -860,6 +867,16 @@ export default function DashboardClient() {
                 </div>
               </div>
               <div className="chatActions">
+                {selected.unread_count > 0 && (
+                  <button
+                    type="button"
+                    className="markReadButton"
+                    title="Marcar conversa como lida"
+                    onClick={() => void markConversationRead()}
+                  >
+                    ✓ <span>Marcar como lida</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   title="Buscar mensagens"
@@ -887,6 +904,17 @@ export default function DashboardClient() {
                   </button>
                   {actionsOpen && (
                     <div className="chatActionMenu">
+                      {selected.unread_count > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActionsOpen(false);
+                            void markConversationRead();
+                          }}
+                        >
+                          Marcar como lida
+                        </button>
+                      )}
                       {selected.assigned_member_id === membership.id ? (
                         <button
                           type="button"
