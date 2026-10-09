@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import SectionLayout from "./section-layout";
 import { supabase } from "../lib/supabase";
 import { useMaisChatContext } from "../lib/use-mais-chat-context";
@@ -20,6 +21,7 @@ type Template = {
   category: TemplateCategory;
   status: "APPROVED";
   body: string;
+  header_text: string | null;
 };
 
 type PricingRate = {
@@ -57,6 +59,9 @@ type Broadcast = {
   actual_cost_brl: number | null;
   started_at: string | null;
   completed_at: string | null;
+  whatsapp_account_id: string | null;
+  source_type: string;
+  excluded_count: number;
   sent_count: number;
   delivered_count: number;
   read_count: number;
@@ -71,6 +76,44 @@ type Broadcast = {
 type AudienceContact = {
   id: string;
   phone_e164: string;
+  name: string | null;
+};
+
+type Account = {
+  id: string;
+  verified_name: string | null;
+  display_phone_number: string | null;
+  status: string;
+};
+
+type Tag = {
+  id: string;
+  name: string;
+  color: string;
+};
+
+type SourceType = "CRM_STATUS" | "TAG" | "FILE";
+
+type ImportedRow = {
+  rowNumber: number;
+  values: Record<string, string>;
+};
+
+type ReviewRecipient = {
+  key: string;
+  contactId: string | null;
+  name: string | null;
+  phone: string;
+  rawPhone: string;
+  rowNumber: number | null;
+  rawData: Record<string, string>;
+  eligible: boolean;
+  reason: string | null;
+};
+
+type VariableMapping = {
+  source: "CONTACT_NAME" | "CONTACT_PHONE" | "COLUMN" | "FIXED";
+  value: string;
 };
 
 type RecipientMetaStats = {
@@ -120,6 +163,25 @@ function percent(value: number, total: number) {
   return `${Math.round((value / total) * 100)}%`;
 }
 
+function variableNumbers(value: string | null | undefined) {
+  if (!value) return [];
+  return [...new Set(
+    [...value.matchAll(/\{\{(\d+)\}\}/g)].map((match) => Number(match[1]))
+  )].sort((a, b) => a - b);
+}
+
+function normalizePhone(value: string) {
+  let digits = value.replace(/\D/g, "");
+  if (!digits) return null;
+
+  if (digits.length === 10 || digits.length === 11) {
+    digits = `55${digits}`;
+  }
+
+  if (digits.length < 12 || digits.length > 15) return null;
+  return `+${digits}`;
+}
+
 export default function BroadcastsClient() {
   const ctx = useMaisChatContext();
   const organizationId = ctx.membership?.organization_id ?? null;
@@ -128,6 +190,8 @@ export default function BroadcastsClient() {
   const [recipientMetaStats, setRecipientMetaStats] =
     useState<Record<string, RecipientMetaStats>>({});
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [rates, setRates] = useState<Record<TemplateCategory, number>>({
     MARKETING: 0,
     UTILITY: 0,
@@ -135,9 +199,24 @@ export default function BroadcastsClient() {
   });
 
   const [showForm, setShowForm] = useState(false);
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [name, setName] = useState("");
+  const [channelId, setChannelId] = useState("");
+  const [sourceType, setSourceType] = useState<SourceType>("CRM_STATUS");
   const [templateId, setTemplateId] = useState("");
   const [audience, setAudience] = useState<ContactStatus[]>(["LEAD"]);
+  const [selectedTagId, setSelectedTagId] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [firstRowHeader, setFirstRowHeader] = useState(true);
+  const [rawSheetRows, setRawSheetRows] = useState<unknown[][]>([]);
+  const [fileHeaders, setFileHeaders] = useState<string[]>([]);
+  const [importedRows, setImportedRows] = useState<ImportedRow[]>([]);
+  const [phoneColumn, setPhoneColumn] = useState("");
+  const [nameColumn, setNameColumn] = useState("");
+  const [variableMappings, setVariableMappings] =
+    useState<Record<string, VariableMapping>>({});
+  const [reviewRecipients, setReviewRecipients] = useState<ReviewRecipient[]>([]);
+  const [reviewReady, setReviewReady] = useState(false);
   const [audienceCount, setAudienceCount] = useState(0);
   const [counting, setCounting] = useState(false);
   const [pricingSyncing, setPricingSyncing] = useState(false);
@@ -197,17 +276,23 @@ export default function BroadcastsClient() {
   async function loadData() {
     if (!organizationId) return;
 
-    const [broadcastResult, templateResult, rateResult] = await Promise.all([
+    const [
+      broadcastResult,
+      templateResult,
+      rateResult,
+      accountResult,
+      tagResult
+    ] = await Promise.all([
       supabase
         .from("broadcasts")
         .select(
-          "id,name,template_id,category,audience_status,audience_count,status,unit_cost_brl,estimated_cost_brl,actual_cost_brl,started_at,completed_at,sent_count,delivered_count,read_count,failed_count,created_at,message_templates(name)"
+          "id,name,template_id,category,audience_status,audience_count,status,unit_cost_brl,estimated_cost_brl,actual_cost_brl,started_at,completed_at,whatsapp_account_id,source_type,excluded_count,sent_count,delivered_count,read_count,failed_count,created_at,message_templates(name)"
         )
         .eq("organization_id", organizationId)
         .order("created_at", { ascending: false }),
       supabase
         .from("message_templates")
-        .select("id,name,category,status,body")
+        .select("id,name,category,status,body,header_text")
         .eq("organization_id", organizationId)
         .eq("status", "APPROVED")
         .in("category", ["MARKETING", "UTILITY", "AUTHENTICATION"])
@@ -215,11 +300,25 @@ export default function BroadcastsClient() {
       supabase
         .from("whatsapp_pricing_rates")
         .select("category,unit_cost_brl,market,currency,source,fetched_at,tier_list")
+        .eq("organization_id", organizationId),
+      supabase
+        .from("whatsapp_accounts")
+        .select("id,verified_name,display_phone_number,status")
         .eq("organization_id", organizationId)
+        .order("created_at"),
+      supabase
+        .from("tags")
+        .select("id,name,color")
+        .eq("organization_id", organizationId)
+        .order("name")
     ]);
 
     const error =
-      broadcastResult.error || templateResult.error || rateResult.error;
+      broadcastResult.error ||
+      templateResult.error ||
+      rateResult.error ||
+      accountResult.error ||
+      tagResult.error;
 
     if (error) {
       setMessage(error.message);
@@ -229,6 +328,16 @@ export default function BroadcastsClient() {
     const broadcastRows = (broadcastResult.data ?? []) as Broadcast[];
     setBroadcasts(broadcastRows);
     setTemplates((templateResult.data ?? []) as Template[]);
+    const accountRows = (accountResult.data ?? []) as Account[];
+    setAccounts(accountRows);
+    setTags((tagResult.data ?? []) as Tag[]);
+    setChannelId((current) =>
+      current && accountRows.some((item) => item.id === current)
+        ? current
+        : accountRows.find((item) => item.status === "CONNECTED")?.id ??
+          accountRows[0]?.id ??
+          ""
+    );
 
     if (broadcastRows.length) {
       const { data: recipientRows } = await supabase
