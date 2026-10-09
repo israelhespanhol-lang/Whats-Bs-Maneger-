@@ -3478,3 +3478,68 @@
     flex-direction: column;
   }
 }
+
+
+/* Conversation CRM inspector */
+.crmInspectorBlock {
+  display: grid;
+  gap: 7px;
+}
+
+.inspectorSelect {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--text);
+  padding: 0 9px;
+  outline: none;
+  font-size: 10px;
+}
+
+.inspectorSelect:focus {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+}
+
+.inspectorLabelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.inspectorLabelRow a {
+  color: var(--accent-strong);
+  text-decoration: none;
+  font-size: 8px;
+  font-weight: 750;
+}
+
+.inspectorTags {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.inspectorTags button {
+  min-height: 25px;
+  max-width: 100%;
+  border: 1px solid;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  padding: 0 7px;
+  font-size: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspectorTags button.active {
+  background: var(--accent-soft);
+}
+
+.emptyInspectorText {
+  color: var(--text-soft);
+  font-size: 9px;
+}
