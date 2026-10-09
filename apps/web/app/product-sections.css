@@ -1658,3 +1658,400 @@
     flex-direction: column;
   }
 }
+
+
+/* Explicit unread handling */
+.markReadButton {
+  width: auto !important;
+  min-width: 0 !important;
+  height: 32px !important;
+  padding: 0 10px !important;
+  border-radius: 8px !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)) !important;
+  background: var(--accent-soft) !important;
+  color: var(--accent-strong) !important;
+  font-size: 10px !important;
+  font-weight: 800;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+}
+
+.markReadButton:hover {
+  border-color: var(--accent) !important;
+}
+
+/* Bulk broadcasts and cost tracking */
+.broadcastSafetyBanner {
+  min-height: 62px;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+  background: var(--accent-soft);
+  border-radius: 13px;
+  padding: 13px 15px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.broadcastSafetyBanner > div {
+  min-width: 0;
+}
+
+.broadcastSafetyBanner strong,
+.broadcastSafetyBanner span {
+  display: block;
+}
+
+.broadcastSafetyBanner > div > strong {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.broadcastSafetyBanner > div > span {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.broadcastCreateCard {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 15px;
+  padding: 18px;
+  margin-bottom: 18px;
+  box-shadow: 0 9px 30px var(--shadow);
+}
+
+.broadcastFormGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.broadcastCostPanel {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(220px, 1fr) minmax(190px, 0.9fr);
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.broadcastCostMetric,
+.broadcastRateField {
+  min-height: 104px;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  border-radius: 12px;
+  padding: 13px;
+}
+
+.broadcastCostMetric span,
+.broadcastCostMetric strong,
+.broadcastCostMetric small {
+  display: block;
+}
+
+.broadcastCostMetric span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.broadcastCostMetric strong {
+  margin: 7px 0 3px;
+  font-size: 22px;
+  letter-spacing: -0.035em;
+}
+
+.broadcastCostMetric small,
+.broadcastRateField small {
+  color: var(--text-soft);
+  font-size: 9px;
+}
+
+.broadcastCostMetric.highlighted {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
+  background: var(--accent-soft);
+}
+
+.broadcastCostMetric.highlighted strong {
+  color: var(--accent-strong);
+}
+
+.broadcastRateField > label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.broadcastRateField > label span {
+  color: var(--accent-strong);
+  font-size: 9px;
+}
+
+.broadcastRateField > div {
+  height: 40px;
+  margin: 8px 0 4px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+}
+
+.broadcastRateField > div > span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.broadcastRateField input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.broadcastConsent {
+  margin-top: 14px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-soft);
+  border-radius: 10px;
+  padding: 11px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.broadcastConsent input {
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.broadcastFormFooter {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.broadcastFormFooter > div > strong,
+.broadcastFormFooter > div > span {
+  display: block;
+}
+
+.broadcastFormFooter > div > strong {
+  font-size: 11px;
+}
+
+.broadcastFormFooter > div > span {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+.broadcastListHeader {
+  min-height: 68px;
+  padding: 15px 17px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.broadcastListHeader h2 {
+  margin: 4px 0 0;
+  font-size: 16px;
+}
+
+.broadcastListHeader > span {
+  color: var(--text-soft);
+  font-size: 10px;
+}
+
+.broadcastList {
+  display: grid;
+}
+
+.broadcastRow {
+  padding: 17px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.broadcastRow:last-child {
+  border-bottom: 0;
+}
+
+.broadcastRow:hover {
+  background: var(--surface-soft);
+}
+
+.broadcastRowTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.broadcastTitleLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.broadcastTitleLine h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.broadcastRowTop p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.broadcastCostBadge {
+  min-width: 116px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: var(--accent-soft);
+  border-radius: 10px;
+  padding: 9px 10px;
+  text-align: right;
+}
+
+.broadcastCostBadge span,
+.broadcastCostBadge strong {
+  display: block;
+}
+
+.broadcastCostBadge span {
+  color: var(--text-muted);
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.broadcastCostBadge strong {
+  margin-top: 3px;
+  color: var(--accent-strong);
+  font-size: 13px;
+}
+
+.broadcastProgressGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.broadcastProgressGrid > div,
+.broadcastCostBreakdown > div {
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  border-radius: 9px;
+  padding: 9px;
+}
+
+.broadcastProgressGrid span,
+.broadcastProgressGrid strong,
+.broadcastCostBreakdown span,
+.broadcastCostBreakdown strong {
+  display: block;
+}
+
+.broadcastProgressGrid span,
+.broadcastCostBreakdown span {
+  color: var(--text-soft);
+  font-size: 8px;
+}
+
+.broadcastProgressGrid strong,
+.broadcastCostBreakdown strong {
+  margin-top: 3px;
+  font-size: 11px;
+}
+
+.broadcastCostBreakdown {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 7px;
+}
+
+.broadcastRowFooter {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.state-sending {
+  border-color: color-mix(in srgb, #4f8ee8 42%, var(--border));
+  background: rgba(79, 142, 232, 0.1);
+  color: #77a9ec;
+}
+
+.state-completed {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.state-canceled {
+  opacity: 0.72;
+}
+
+@media (max-width: 980px) {
+  .broadcastFormGrid,
+  .broadcastCostPanel {
+    grid-template-columns: 1fr;
+  }
+
+  .broadcastProgressGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .broadcastCostBreakdown {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .markReadButton span {
+    display: none;
+  }
+
+  .broadcastSafetyBanner,
+  .broadcastFormFooter,
+  .broadcastRowTop,
+  .broadcastRowFooter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .broadcastCostBadge {
+    text-align: left;
+  }
+}
