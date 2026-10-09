@@ -808,3 +808,133 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+
+/* Inbox interactive controls */
+.chatActions {
+  position: relative;
+}
+
+.chatActions > button.active,
+.chatMenuWrap > button.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+}
+
+.chatMenuWrap {
+  position: relative;
+}
+
+.chatActionMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 184px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px var(--shadow);
+  z-index: 30;
+}
+
+.chatActionMenu button {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  border-radius: 7px;
+  text-align: left;
+  font-size: 11px;
+}
+
+.chatActionMenu button:hover {
+  background: var(--surface-soft);
+}
+
+.messageSearchBar {
+  min-height: 48px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.messageSearchBar > span:first-child {
+  color: var(--text-muted);
+}
+
+.messageSearchBar input {
+  min-width: 0;
+  flex: 1;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--text);
+  padding: 0 10px;
+  outline: none;
+}
+
+.messageSearchBar input:focus {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.messageSearchCount {
+  color: var(--text-soft);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.messageSearchBar button {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+}
+
+.messageSearchBar button:hover {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.attachmentInput {
+  display: none !important;
+}
+
+.statusSelectPill {
+  appearance: auto;
+  cursor: pointer;
+  width: auto;
+  max-width: 180px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  outline: none;
+}
+
+.statusSelectPill:focus {
+  border-color: var(--accent);
+}
+
+.composer button:disabled {
+  cursor: not-allowed;
+}
+
+@media (max-width: 680px) {
+  .chatActionMenu {
+    right: -4px;
+  }
+
+  .messageSearchCount {
+    display: none;
+  }
+}
