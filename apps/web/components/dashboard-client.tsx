@@ -77,6 +77,19 @@ type ContactTagRow = {
   tags: Tag | Tag[] | null;
 };
 
+type CampaignOption = {
+  id: string;
+  name: string;
+  status: string;
+};
+
+type CrmStageOption = {
+  id: string;
+  name: string;
+  color: string;
+  semantic_key: string | null;
+};
+
 function one<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? value[0] ?? null : value;
 }
@@ -199,6 +212,9 @@ export default function DashboardClient() {
   const [channelPickerOpen, setChannelPickerOpen] = useState(false);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [memberNames, setMemberNames] = useState<Record<string, string>>({});
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [campaignOptions, setCampaignOptions] = useState<CampaignOption[]>([]);
+  const [crmStages, setCrmStages] = useState<CrmStageOption[]>([]);
   const [tagsByContact, setTagsByContact] = useState<Record<string, Tag[]>>({});
   const [messageMatchConversationIds, setMessageMatchConversationIds] =
     useState<Set<string>>(new Set());
@@ -451,6 +467,35 @@ export default function DashboardClient() {
           .filter((item) => item.status === "CONNECTED")
           .map((item) => item.id)
       );
+
+      const [campaignResult, stageResult, tagCatalogResult] = await Promise.all([
+        supabase
+          .from("campaigns")
+          .select("id,name,status")
+          .eq("organization_id", typedMember.organization_id)
+          .neq("status", "ARCHIVED")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("crm_stages")
+          .select("id,name,color,semantic_key")
+          .eq("organization_id", typedMember.organization_id)
+          .order("position"),
+        supabase
+          .from("tags")
+          .select("id,name,color")
+          .eq("organization_id", typedMember.organization_id)
+          .order("name")
+      ]);
+
+      if (!campaignResult.error) {
+        setCampaignOptions((campaignResult.data ?? []) as CampaignOption[]);
+      }
+      if (!stageResult.error) {
+        setCrmStages((stageResult.data ?? []) as CrmStageOption[]);
+      }
+      if (!tagCatalogResult.error) {
+        setAllTags((tagCatalogResult.data ?? []) as Tag[]);
+      }
 
       await loadConversations(typedMember.organization_id);
       setLoading(false);
@@ -758,6 +803,121 @@ export default function DashboardClient() {
     if (statusError) {
       setError(statusError.message);
       await loadConversations(membership.organization_id);
+    }
+  }
+
+  async function updateConversationAssignee(memberId: string) {
+    if (!selected || !membership) return;
+
+    const next = memberId || null;
+    setConversations((current) =>
+      current.map((item) =>
+        item.id === selected.id
+          ? { ...item, assigned_member_id: next }
+          : item
+      )
+    );
+
+    const { error: assignmentError } = await supabase
+      .from("conversations")
+      .update({ assigned_member_id: next })
+      .eq("id", selected.id);
+
+    if (assignmentError) {
+      setError(assignmentError.message);
+      await loadConversations(membership.organization_id);
+    }
+  }
+
+  async function updateConversationCampaign(campaignId: string) {
+    if (!selected || !membership) return;
+
+    const next = campaignId || null;
+    setConversations((current) =>
+      current.map((item) =>
+        item.id === selected.id ? { ...item, campaign_id: next } : item
+      )
+    );
+
+    const { error: campaignError } = await supabase
+      .from("conversations")
+      .update({ campaign_id: next })
+      .eq("id", selected.id);
+
+    if (campaignError) {
+      setError(campaignError.message);
+      await loadConversations(membership.organization_id);
+    }
+  }
+
+  async function updateConversationStage(stageId: string) {
+    if (!selected || !membership || !contact) return;
+
+    const next = stageId || null;
+    setConversations((current) =>
+      current.map((item) =>
+        item.id === selected.id ? { ...item, crm_stage_id: next } : item
+      )
+    );
+
+    const { error: stageError } = await supabase
+      .from("conversations")
+      .update({ crm_stage_id: next })
+      .eq("id", selected.id);
+
+    if (stageError) {
+      setError(stageError.message);
+      await loadConversations(membership.organization_id);
+      return;
+    }
+
+    const stage = crmStages.find((item) => item.id === next);
+    const mappedStatus =
+      stage?.semantic_key === "INTERESTED"
+        ? "INTERESTED"
+        : stage?.semantic_key === "WON"
+          ? "CUSTOMER"
+          : stage?.semantic_key === "LOST"
+            ? "NOT_INTERESTED"
+            : stage?.semantic_key &&
+                ["IN_SERVICE", "PROPOSAL", "PAYMENT", "FOLLOW_UP"].includes(
+                  stage.semantic_key
+                )
+              ? "NEGOTIATION"
+              : "LEAD";
+
+    if (stage) {
+      await updateContactStatus(contact.id, mappedStatus);
+    }
+  }
+
+  async function toggleContactTag(tag: Tag) {
+    if (!contact) return;
+
+    const current = tagsByContact[contact.id] ?? [];
+    const exists = current.some((item) => item.id === tag.id);
+
+    setTagsByContact((all) => ({
+      ...all,
+      [contact.id]: exists
+        ? current.filter((item) => item.id !== tag.id)
+        : [...current, tag]
+    }));
+
+    const result = exists
+      ? await supabase
+          .from("contact_tags")
+          .delete()
+          .eq("contact_id", contact.id)
+          .eq("tag_id", tag.id)
+      : await supabase.from("contact_tags").insert({
+          contact_id: contact.id,
+          tag_id: tag.id
+        });
+
+    if (result.error) {
+      setError(result.error.message);
+      if (membership) await loadConversations(membership.organization_id);
     }
   }
 
@@ -1480,6 +1640,93 @@ export default function DashboardClient() {
                 <option value="CUSTOMER">Cliente</option>
                 <option value="NOT_INTERESTED">Sem interesse</option>
               </select>
+            </div>
+
+            <div className="infoBlock crmInspectorBlock">
+              <span className="sectionLabel">RESPONSÁVEL</span>
+              <select
+                className="inspectorSelect"
+                value={selected?.assigned_member_id ?? ""}
+                onChange={(event) =>
+                  void updateConversationAssignee(event.target.value)
+                }
+              >
+                <option value="">Não atribuído</option>
+                {Object.entries(memberNames).map(([id, name]) => (
+                  <option value={id} key={id}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="infoBlock crmInspectorBlock">
+              <span className="sectionLabel">ETAPA COMERCIAL</span>
+              <select
+                className="inspectorSelect"
+                value={selected?.crm_stage_id ?? ""}
+                onChange={(event) =>
+                  void updateConversationStage(event.target.value)
+                }
+              >
+                <option value="">Sem etapa</option>
+                {crmStages.map((stage) => (
+                  <option value={stage.id} key={stage.id}>
+                    {stage.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="infoBlock crmInspectorBlock">
+              <span className="sectionLabel">CAMPANHA / GRUPO</span>
+              <select
+                className="inspectorSelect"
+                value={selected?.campaign_id ?? ""}
+                onChange={(event) =>
+                  void updateConversationCampaign(event.target.value)
+                }
+              >
+                <option value="">Sem campanha</option>
+                {campaignOptions.map((campaign) => (
+                  <option value={campaign.id} key={campaign.id}>
+                    {campaign.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="infoBlock crmInspectorBlock">
+              <div className="inspectorLabelRow">
+                <span className="sectionLabel">ETIQUETAS</span>
+                <a href="/crm">Gerenciar</a>
+              </div>
+              <div className="inspectorTags">
+                {allTags.length === 0 ? (
+                  <span className="emptyInspectorText">Nenhuma etiqueta criada.</span>
+                ) : (
+                  allTags.slice(0, 12).map((tag) => {
+                    const active = (tagsByContact[contact.id] ?? []).some(
+                      (item) => item.id === tag.id
+                    );
+                    return (
+                      <button
+                        type="button"
+                        key={tag.id}
+                        className={active ? "active" : ""}
+                        style={{
+                          borderColor: tag.color,
+                          color: tag.color
+                        }}
+                        onClick={() => void toggleContactTag(tag)}
+                      >
+                        {active ? "✓ " : "+ "}
+                        {tag.name}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
             </div>
 
             <div className="infoBlock">
