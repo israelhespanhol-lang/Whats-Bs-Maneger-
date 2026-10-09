@@ -3644,3 +3644,32 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.channelPickerActions {
+  display: flex;
+  gap: 7px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.channelPickerActions .primaryAction,
+.channelPickerActions .secondaryAction {
+  min-height: 36px;
+  font-size: 9px;
+}
+
+.channelPickerActions .primaryAction {
+  flex: 1;
+  min-width: 180px;
+}
+
+@media (max-width: 560px) {
+  .channelPickerActions {
+    flex-direction: column;
+  }
+
+  .channelPickerActions > * {
+    width: 100%;
+  }
+}
