@@ -133,6 +133,7 @@ export default function BroadcastsClient() {
   const [pricingFetchedAt, setPricingFetchedAt] = useState<string | null>(null);
   const [optInConfirmed, setOptInConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [sendingBroadcastId, setSendingBroadcastId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   async function syncPricing(force = false) {
@@ -440,6 +441,68 @@ export default function BroadcastsClient() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function startBroadcast(broadcast: Broadcast) {
+    if (sendingBroadcastId) return;
+
+    const estimated = Number(broadcast.estimated_cost_brl ?? 0);
+    const confirmed = window.confirm(
+      `Enviar agora ${broadcast.audience_count} mensagem(ns) pelo template aprovado?\n\nCusto estimado: ${money(estimated)}\n\nO envio só começa após esta confirmação.`
+    );
+
+    if (!confirmed) return;
+
+    setSendingBroadcastId(broadcast.id);
+    setMessage(null);
+
+    let totalAccepted = 0;
+    let totalFailed = 0;
+
+    try {
+      for (let batch = 0; batch < 100; batch += 1) {
+        const { data, error } = await supabase.functions.invoke(
+          "whatsapp-broadcast-send",
+          {
+            body: {
+              broadcastId: broadcast.id,
+              confirm: true,
+              batchSize: 25
+            }
+          }
+        );
+
+        if (error || !data?.ok) {
+          throw new Error(
+            data?.error ||
+              error?.message ||
+              "Não foi possível executar o disparo."
+          );
+        }
+
+        totalAccepted += Number(data.accepted ?? 0);
+        totalFailed += Number(data.failed ?? 0);
+
+        await loadData();
+
+        if (Number(data.remaining ?? 0) === 0) {
+          break;
+        }
+      }
+
+      setMessage(
+        `Envio processado: ${totalAccepted} aceita(s) pela Meta e ${totalFailed} falha(s). Entrega e leitura serão atualizadas automaticamente pelo webhook.`
+      );
+    } catch (sendError) {
+      setMessage(
+        sendError instanceof Error
+          ? sendError.message
+          : "Não foi possível concluir o disparo."
+      );
+    } finally {
+      setSendingBroadcastId(null);
+      await loadData();
     }
   }
 
@@ -775,8 +838,22 @@ export default function BroadcastsClient() {
                   </div>
 
                   <div className="cardActions">
+                    {["READY", "SENDING"].includes(broadcast.status) && (
+                      <button
+                        className="sendBroadcastButton"
+                        disabled={Boolean(sendingBroadcastId)}
+                        onClick={() => void startBroadcast(broadcast)}
+                      >
+                        {sendingBroadcastId === broadcast.id
+                          ? "Enviando..."
+                          : broadcast.status === "SENDING"
+                            ? "Continuar envio"
+                            : "Iniciar envio"}
+                      </button>
+                    )}
                     {broadcast.status === "READY" && (
                       <button
+                        disabled={Boolean(sendingBroadcastId)}
                         onClick={() =>
                           void updateStatus(broadcast.id, "PAUSED")
                         }
@@ -797,6 +874,7 @@ export default function BroadcastsClient() {
                       broadcast.status
                     ) && (
                       <button
+                        disabled={Boolean(sendingBroadcastId)}
                         onClick={() =>
                           void updateStatus(broadcast.id, "CANCELED")
                         }
