@@ -6,6 +6,7 @@ import ThemeToggle from "./theme-toggle";
 export type SidebarSection =
   | "conversations"
   | "contacts"
+  | "crm"
   | "campaigns"
   | "broadcasts"
   | "templates"
@@ -32,18 +33,38 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-const items: Array<{
-  id: SidebarSection;
+const groups: Array<{
   label: string;
-  href: string;
+  items: Array<{
+    id: SidebarSection;
+    label: string;
+    href: string;
+    icon: string;
+  }>;
 }> = [
-  { id: "conversations", label: "Conversas", href: "/" },
-  { id: "contacts", label: "Contatos", href: "/contacts" },
-  { id: "campaigns", label: "Campanhas", href: "/campaigns" },
-  { id: "broadcasts", label: "Disparos", href: "/broadcasts" },
-  { id: "templates", label: "Templates", href: "/templates" },
-  { id: "reports", label: "Relatórios", href: "/reports" },
-  { id: "settings", label: "Configurações", href: "/settings" }
+  {
+    label: "Atendimento",
+    items: [
+      { id: "conversations", label: "Conversas", href: "/", icon: "◉" },
+      { id: "crm", label: "CRM Kanban", href: "/crm", icon: "▦" },
+      { id: "contacts", label: "Contatos", href: "/contacts", icon: "◎" }
+    ]
+  },
+  {
+    label: "Operação",
+    items: [
+      { id: "campaigns", label: "Campanhas", href: "/campaigns", icon: "◇" },
+      { id: "broadcasts", label: "Disparos", href: "/broadcasts", icon: "➤" },
+      { id: "templates", label: "Templates", href: "/templates", icon: "▤" }
+    ]
+  },
+  {
+    label: "Gestão",
+    items: [
+      { id: "reports", label: "Relatórios", href: "/reports", icon: "⌁" },
+      { id: "settings", label: "Configurações", href: "/settings", icon: "⚙" }
+    ]
+  }
 ];
 
 export default function AppSidebar({
@@ -62,16 +83,24 @@ export default function AppSidebar({
         <span className="productName">Mais Chat</span>
       </div>
 
-      <nav>
-        {items.map((item) => (
-          <a
-            key={item.id}
-            className={`navItem ${active === item.id ? "active" : ""}`}
-            href={item.href}
-          >
-            {item.label}
-            {item.id === "conversations" && unread > 0 && <span>{unread}</span>}
-          </a>
+      <nav className="sidebarNav">
+        {groups.map((group) => (
+          <div className="sidebarNavGroup" key={group.label}>
+            <span className="sidebarNavLabel">{group.label}</span>
+            {group.items.map((item) => (
+              <a
+                key={item.id}
+                className={`navItem ${active === item.id ? "active" : ""}`}
+                href={item.href}
+              >
+                <i className="navIcon" aria-hidden="true">{item.icon}</i>
+                <span className="navLabel">{item.label}</span>
+                {item.id === "conversations" && unread > 0 && (
+                  <span className="navBadge">{unread}</span>
+                )}
+              </a>
+            ))}
+          </div>
         ))}
       </nav>
 
