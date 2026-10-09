@@ -209,6 +209,7 @@ export default function DashboardClient() {
   const [account, setAccount] = useState<WhatsAppAccount | null>(null);
   const [accounts, setAccounts] = useState<WhatsAppAccount[]>([]);
   const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
+  const [channelDraftIds, setChannelDraftIds] = useState<string[]>([]);
   const [channelPickerOpen, setChannelPickerOpen] = useState(false);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [memberNames, setMemberNames] = useState<Record<string, string>>({});
@@ -1153,7 +1154,10 @@ export default function DashboardClient() {
             </label>
             <button
               type="button"
-              onClick={() => setChannelPickerOpen(true)}
+              onClick={() => {
+                setChannelDraftIds(selectedChannelIds);
+                setChannelPickerOpen(true);
+              }}
             >
               Canais: {selectedChannelIds.length || "nenhum"}
             </button>
@@ -1273,7 +1277,10 @@ export default function DashboardClient() {
         <footer className="conversationListFooter">
           <button
             type="button"
-            onClick={() => setChannelPickerOpen(true)}
+            onClick={() => {
+              setChannelDraftIds(selectedChannelIds);
+              setChannelPickerOpen(true);
+            }}
             className="channelSelectorButton"
           >
             <i className={connected ? "online" : ""} />
@@ -1301,7 +1308,10 @@ export default function DashboardClient() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setChannelPickerOpen(false)}
+                  onClick={() => {
+                    setChannelDraftIds(selectedChannelIds);
+                    setChannelPickerOpen(false);
+                  }}
                 >
                   ×
                 </button>
@@ -1311,14 +1321,14 @@ export default function DashboardClient() {
                 type="button"
                 className="channelSelectAll"
                 onClick={() =>
-                  setSelectedChannelIds(
-                    selectedChannelIds.length === accounts.length
+                  setChannelDraftIds(
+                    channelDraftIds.length === accounts.length
                       ? []
                       : accounts.map((item) => item.id)
                   )
                 }
               >
-                {selectedChannelIds.length === accounts.length
+                {channelDraftIds.length === accounts.length
                   ? "Limpar seleção"
                   : "Selecionar todos"}
               </button>
@@ -1328,9 +1338,9 @@ export default function DashboardClient() {
                   <label key={channel.id}>
                     <input
                       type="checkbox"
-                      checked={selectedChannelIds.includes(channel.id)}
+                      checked={channelDraftIds.includes(channel.id)}
                       onChange={(event) => {
-                        setSelectedChannelIds((current) =>
+                        setChannelDraftIds((current) =>
                           event.target.checked
                             ? [...new Set([...current, channel.id])]
                             : current.filter((id) => id !== channel.id)
@@ -1348,13 +1358,32 @@ export default function DashboardClient() {
                 ))}
               </div>
 
-              <button
-                type="button"
-                className="primaryAction"
-                onClick={() => setChannelPickerOpen(false)}
-              >
-                Abrir Chat com {selectedChannelIds.length} selecionado(s)
-              </button>
+              <div className="channelPickerActions">
+                <button
+                  type="button"
+                  className="secondaryAction"
+                  onClick={() => {
+                    setChannelDraftIds(selectedChannelIds);
+                    setChannelPickerOpen(false);
+                  }}
+                >
+                  Cancelar
+                </button>
+                <a className="secondaryAction" href="/settings/whatsapp">
+                  Configurar canal
+                </a>
+                <button
+                  type="button"
+                  className="primaryAction"
+                  disabled={channelDraftIds.length === 0}
+                  onClick={() => {
+                    setSelectedChannelIds(channelDraftIds);
+                    setChannelPickerOpen(false);
+                  }}
+                >
+                  Abrir Chat com {channelDraftIds.length} selecionado(s)
+                </button>
+              </div>
             </div>
           </div>
         )}
