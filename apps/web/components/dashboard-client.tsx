@@ -22,10 +22,15 @@ type Contact = {
 
 type Conversation = {
   id: string;
+  whatsapp_account_id: string;
   assigned_member_id: string | null;
+  campaign_id: string | null;
+  crm_stage_id: string | null;
   status: string;
   unread_count: number;
   last_message_at: string | null;
+  last_message_preview: string | null;
+  last_message_direction: "INBOUND" | "OUTBOUND" | null;
   customer_service_window_expires_at: string | null;
   contacts: Contact | Contact[] | null;
 };
@@ -43,13 +48,33 @@ type Message = {
   optimistic?: boolean;
 };
 
-type ConversationFilter = "ALL" | "UNREAD" | "MINE";
+type ConversationFilter = "NEW" | "MINE" | "ALL";
+type ConversationOrder = "RECENT" | "UNREAD_RECENT";
 
 type WhatsAppAccount = {
   id: string;
   status: "DISCONNECTED" | "CONNECTING" | "CONNECTED" | "ERROR";
   display_phone_number: string | null;
   verified_name: string | null;
+};
+
+type MemberDirectoryRow = {
+  id: string;
+  users:
+    | { name: string; email: string }
+    | { name: string; email: string }[]
+    | null;
+};
+
+type Tag = {
+  id: string;
+  name: string;
+  color: string;
+};
+
+type ContactTagRow = {
+  contact_id: string;
+  tags: Tag | Tag[] | null;
 };
 
 function one<T>(value: T | T[] | null): T | null {
@@ -72,6 +97,26 @@ function time(value: string | null) {
   return new Intl.DateTimeFormat("pt-BR", {
     hour: "2-digit",
     minute: "2-digit"
+  }).format(new Date(value));
+}
+
+function relativeTime(value: string | null) {
+  if (!value) return "";
+  const diff = Date.now() - new Date(value).getTime();
+  const minutes = Math.max(0, Math.floor(diff / 60_000));
+
+  if (minutes < 1) return "agora";
+  if (minutes < 60) return `${minutes}min`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d`;
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "short"
   }).format(new Date(value));
 }
 
@@ -149,6 +194,14 @@ export default function DashboardClient() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [userName, setUserName] = useState("Usuário");
   const [account, setAccount] = useState<WhatsAppAccount | null>(null);
+  const [accounts, setAccounts] = useState<WhatsAppAccount[]>([]);
+  const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
+  const [channelPickerOpen, setChannelPickerOpen] = useState(false);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [memberNames, setMemberNames] = useState<Record<string, string>>({});
+  const [tagsByContact, setTagsByContact] = useState<Record<string, Tag[]>>({});
+  const [messageMatchConversationIds, setMessageMatchConversationIds] =
+    useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [draft, setDraft] = useState("");
@@ -156,7 +209,9 @@ export default function DashboardClient() {
   const [uploading, setUploading] = useState(false);
   const [conversationSearch, setConversationSearch] = useState("");
   const [conversationFilter, setConversationFilter] =
-    useState<ConversationFilter>("ALL");
+    useState<ConversationFilter>("NEW");
+  const [conversationOrder, setConversationOrder] =
+    useState<ConversationOrder>("RECENT");
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const [messageSearch, setMessageSearch] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -167,20 +222,37 @@ export default function DashboardClient() {
   const shouldAutoScrollRef = useRef(true);
 
   const selected = useMemo(
-    () => conversations.find((item) => item.id === selectedId) ?? conversations[0] ?? null,
+    () => conversations.find((item) => item.id === selectedId) ?? null,
     [conversations, selectedId]
   );
 
   const visibleConversations = useMemo(() => {
     const term = conversationSearch.trim().toLowerCase();
 
-    return conversations.filter((item) => {
+    const filtered = conversations.filter((item) => {
       const itemContact = one(item.contacts);
-      const label = `${itemContact?.name ?? ""} ${itemContact?.phone_e164 ?? ""}`
+      const label = `${itemContact?.name ?? ""} ${itemContact?.phone_e164 ?? ""} ${item.last_message_preview ?? ""}`
         .toLowerCase();
 
-      if (term && !label.includes(term)) return false;
-      if (conversationFilter === "UNREAD" && item.unread_count <= 0) return false;
+      if (
+        selectedChannelIds.length > 0 &&
+        !selectedChannelIds.includes(item.whatsapp_account_id)
+      ) {
+        return false;
+      }
+
+      if (
+        term &&
+        !label.includes(term) &&
+        !messageMatchConversationIds.has(item.id)
+      ) {
+        return false;
+      }
+
+      if (conversationFilter === "NEW" && item.assigned_member_id !== null) {
+        return false;
+      }
+
       if (
         conversationFilter === "MINE" &&
         item.assigned_member_id !== membership?.id
@@ -190,7 +262,39 @@ export default function DashboardClient() {
 
       return true;
     });
-  }, [conversations, conversationSearch, conversationFilter, membership?.id]);
+
+    return [...filtered].sort((a, b) => {
+      if (conversationOrder === "UNREAD_RECENT") {
+        const aUnread = a.unread_count > 0 ? 1 : 0;
+        const bUnread = b.unread_count > 0 ? 1 : 0;
+        if (aUnread !== bUnread) return bUnread - aUnread;
+      }
+
+      return (
+        new Date(b.last_message_at ?? 0).getTime() -
+        new Date(a.last_message_at ?? 0).getTime()
+      );
+    });
+  }, [
+    conversations,
+    conversationSearch,
+    conversationFilter,
+    conversationOrder,
+    membership?.id,
+    selectedChannelIds,
+    messageMatchConversationIds
+  ]);
+
+  const conversationCounts = useMemo(
+    () => ({
+      new: conversations.filter((item) => item.assigned_member_id === null).length,
+      mine: conversations.filter(
+        (item) => item.assigned_member_id === membership?.id
+      ).length,
+      all: conversations.length
+    }),
+    [conversations, membership?.id]
+  );
 
   const displayedMessages = useMemo(() => {
     const term = messageSearch.trim().toLowerCase();
@@ -205,11 +309,11 @@ export default function DashboardClient() {
     const { data: rows, error: conversationError } = await supabase
       .from("conversations")
       .select(
-        "id,assigned_member_id,status,unread_count,last_message_at,customer_service_window_expires_at,contacts(id,name,phone_e164,status)"
+        "id,whatsapp_account_id,assigned_member_id,campaign_id,crm_stage_id,status,unread_count,last_message_at,last_message_preview,last_message_direction,customer_service_window_expires_at,contacts(id,name,phone_e164,status)"
       )
       .eq("organization_id", organizationId)
       .order("last_message_at", { ascending: false, nullsFirst: false })
-      .limit(100);
+      .limit(300);
 
     if (conversationError) {
       setError(conversationError.message);
@@ -222,10 +326,46 @@ export default function DashboardClient() {
       const next =
         current && typedRows.some((row) => row.id === current)
           ? current
-          : typedRows[0]?.id ?? null;
+          : null;
       selectedIdRef.current = next;
       return next;
     });
+
+    const contactIds = typedRows
+      .map((row) => one(row.contacts)?.id)
+      .filter(Boolean) as string[];
+
+    const [memberResult, tagResult] = await Promise.all([
+      supabase
+        .from("organization_members")
+        .select("id,users(name,email)")
+        .eq("organization_id", organizationId),
+      contactIds.length
+        ? supabase
+            .from("contact_tags")
+            .select("contact_id,tags(id,name,color)")
+            .in("contact_id", contactIds)
+        : Promise.resolve({ data: [], error: null })
+    ]);
+
+    if (!memberResult.error) {
+      const directory: Record<string, string> = {};
+      for (const member of (memberResult.data ?? []) as MemberDirectoryRow[]) {
+        const user = one(member.users);
+        directory[member.id] = user?.name || user?.email || "Atendente";
+      }
+      setMemberNames(directory);
+    }
+
+    if (!tagResult.error) {
+      const map: Record<string, Tag[]> = {};
+      for (const row of (tagResult.data ?? []) as ContactTagRow[]) {
+        const tag = one(row.tags);
+        if (!tag) continue;
+        map[row.contact_id] = [...(map[row.contact_id] ?? []), tag];
+      }
+      setTagsByContact(map);
+    }
   }, []);
 
   const loadMessages = useCallback(
@@ -297,15 +437,21 @@ export default function DashboardClient() {
       const typedMember = member as Membership;
       setMembership(typedMember);
 
-      const { data: accountData } = await supabase
+      const { data: accountRows } = await supabase
         .from("whatsapp_accounts")
         .select("id,status,display_phone_number,verified_name")
         .eq("organization_id", typedMember.organization_id)
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
+        .order("created_at", { ascending: true });
 
-      setAccount((accountData ?? null) as WhatsAppAccount | null);
+      const typedAccounts = (accountRows ?? []) as WhatsAppAccount[];
+      setAccounts(typedAccounts);
+      setAccount(typedAccounts[0] ?? null);
+      setSelectedChannelIds(
+        typedAccounts
+          .filter((item) => item.status === "CONNECTED")
+          .map((item) => item.id)
+      );
+
       await loadConversations(typedMember.organization_id);
       setLoading(false);
     }
@@ -320,6 +466,31 @@ export default function DashboardClient() {
   useEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!membership) return;
+
+    const term = conversationSearch.trim();
+    if (term.length < 2) {
+      setMessageMatchConversationIds(new Set());
+      return;
+    }
+
+    const timeout = window.setTimeout(async () => {
+      const { data } = await supabase
+        .from("messages")
+        .select("conversation_id")
+        .eq("organization_id", membership.organization_id)
+        .ilike("body", `%${term}%`)
+        .limit(200);
+
+      setMessageMatchConversationIds(
+        new Set((data ?? []).map((row) => row.conversation_id))
+      );
+    }, 260);
+
+    return () => window.clearTimeout(timeout);
+  }, [conversationSearch, membership]);
 
   useEffect(() => {
     if (!messages.length || !shouldAutoScrollRef.current) return;
@@ -766,53 +937,99 @@ export default function DashboardClient() {
       />
 
       <section className="conversationList">
-        <header>
+        <header className="flowInboxHeader">
           <div>
-            <p className="eyebrow">Caixa de entrada</p>
+            <p className="eyebrow">CAIXA DE ENTRADA</p>
             <h1>Conversas</h1>
+            <span className="conversationOrdering">
+              Ordenadas por{" "}
+              {conversationOrder === "RECENT"
+                ? "Mais recentes"
+                : "Não lidas (recentes)"}
+            </span>
           </div>
-          <span className="realDataBadge">Realtime</span>
+          <button
+            type="button"
+            className="conversationAddButton"
+            title="Abrir contatos para iniciar uma conversa"
+            onClick={() => router.push("/contacts")}
+          >
+            ＋
+          </button>
         </header>
 
-        <label className="search">
-          <span>⌕</span>
-          <input
-            value={conversationSearch}
-            onChange={(event) => setConversationSearch(event.target.value)}
-            placeholder="Buscar conversa..."
-          />
-        </label>
-
-        <div className="filters">
+        <div className="conversationSearchRow">
+          <label className="search">
+            <span>⌕</span>
+            <input
+              value={conversationSearch}
+              onChange={(event) => setConversationSearch(event.target.value)}
+              placeholder="Buscar contatos/mensagens..."
+            />
+          </label>
           <button
             type="button"
-            className={`filter ${conversationFilter === "ALL" ? "active" : ""}`}
-            onClick={() => setConversationFilter("ALL")}
+            className={`conversationFilterButton ${filterPanelOpen ? "active" : ""}`}
+            onClick={() => setFilterPanelOpen((current) => !current)}
+            title="Filtros e ordenação"
           >
-            Todas
+            ☷
           </button>
+        </div>
+
+        {filterPanelOpen && (
+          <div className="conversationFilterPanel">
+            <label>
+              <span>Ordenação</span>
+              <select
+                value={conversationOrder}
+                onChange={(event) =>
+                  setConversationOrder(event.target.value as ConversationOrder)
+                }
+              >
+                <option value="RECENT">Mais recentes</option>
+                <option value="UNREAD_RECENT">Não lidas (recentes)</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => setChannelPickerOpen(true)}
+            >
+              Canais: {selectedChannelIds.length || "nenhum"}
+            </button>
+          </div>
+        )}
+
+        <div className="filters flowInboxTabs">
           <button
             type="button"
-            className={`filter ${conversationFilter === "UNREAD" ? "active" : ""}`}
-            onClick={() => setConversationFilter("UNREAD")}
+            className={`filter ${conversationFilter === "NEW" ? "active" : ""}`}
+            onClick={() => setConversationFilter("NEW")}
           >
-            Não lidas
+            Novos <span>{conversationCounts.new}</span>
           </button>
           <button
             type="button"
             className={`filter ${conversationFilter === "MINE" ? "active" : ""}`}
             onClick={() => setConversationFilter("MINE")}
           >
-            Minhas
+            Meus <span>{conversationCounts.mine}</span>
+          </button>
+          <button
+            type="button"
+            className={`filter ${conversationFilter === "ALL" ? "active" : ""}`}
+            onClick={() => setConversationFilter("ALL")}
+          >
+            Todos <span>{conversationCounts.all}</span>
           </button>
         </div>
 
-        <div className="conversationItems">
+        <div className="conversationItems flowConversationItems">
           {visibleConversations.length === 0 ? (
             <div className="emptyList">
               <div className="emptyIcon">◎</div>
               <strong>Nenhuma conversa neste filtro</strong>
-              <p>Altere a busca ou os filtros para visualizar outras conversas.</p>
+              <p>Altere a busca, o canal ou a aba para visualizar outras conversas.</p>
             </div>
           ) : (
             visibleConversations.map((item) => {
@@ -821,11 +1038,17 @@ export default function DashboardClient() {
                 itemContact?.name ||
                 itemContact?.phone_e164 ||
                 "Contato";
+              const assignee = item.assigned_member_id
+                ? memberNames[item.assigned_member_id]
+                : null;
+              const tags = itemContact
+                ? tagsByContact[itemContact.id] ?? []
+                : [];
 
               return (
                 <button
                   type="button"
-                  className={`conversationItem conversationButton ${selected?.id === item.id ? "selected" : ""}`}
+                  className={`conversationItem conversationButton flowConversationItem ${selected?.id === item.id ? "selected" : ""}`}
                   key={item.id}
                   onClick={() => {
                     selectedIdRef.current = item.id;
@@ -833,16 +1056,51 @@ export default function DashboardClient() {
                     setSelectedId(item.id);
                   }}
                 >
-                  <div className="avatar">
-                    {initials(itemContact?.name ?? null, itemContact?.phone_e164 ?? "")}
+                  <div className="conversationAvatarWrap">
+                    <div className="avatar">
+                      {initials(
+                        itemContact?.name ?? null,
+                        itemContact?.phone_e164 ?? ""
+                      )}
+                    </div>
+                    <span className={`assigneeMini ${assignee ? "" : "unassigned"}`}>
+                      {assignee ? initials(assignee, "") : "N"}
+                    </span>
                   </div>
+
                   <div className="conversationCopy">
                     <div className="conversationTop">
                       <strong>{label}</strong>
-                      <time>{time(item.last_message_at)}</time>
+                      <time>{relativeTime(item.last_message_at)}</time>
                     </div>
-                    <p>{item.status === "OPEN" ? "Conversa aberta" : item.status}</p>
+
+                    <span className="conversationPhone">
+                      {itemContact?.phone_e164 ?? ""}
+                    </span>
+
+                    <p className="conversationPreview">
+                      {item.last_message_direction === "OUTBOUND" ? "Você: " : ""}
+                      {item.last_message_preview || "Sem prévia de mensagem"}
+                    </p>
+
+                    {tags.length > 0 && (
+                      <div className="conversationTags">
+                        {tags.slice(0, 2).map((tag) => (
+                          <span
+                            key={tag.id}
+                            style={{
+                              borderColor: tag.color,
+                              color: tag.color
+                            }}
+                          >
+                            {tag.name}
+                          </span>
+                        ))}
+                        {tags.length > 2 && <span>+{tags.length - 2}</span>}
+                      </div>
+                    )}
                   </div>
+
                   {item.unread_count > 0 && (
                     <span className="badge">{item.unread_count}</span>
                   )}
@@ -851,6 +1109,95 @@ export default function DashboardClient() {
             })
           )}
         </div>
+
+        <footer className="conversationListFooter">
+          <button
+            type="button"
+            onClick={() => setChannelPickerOpen(true)}
+            className="channelSelectorButton"
+          >
+            <i className={connected ? "online" : ""} />
+            <div>
+              <strong>
+                {selectedChannelIds.length === accounts.length
+                  ? "Todos os canais"
+                  : `${selectedChannelIds.length} canal(is)`}
+              </strong>
+              <span>
+                {account?.display_phone_number || "Selecionar canais"}
+              </span>
+            </div>
+            <b>⌄</b>
+          </button>
+        </footer>
+
+        {channelPickerOpen && (
+          <div className="channelPickerBackdrop" role="presentation">
+            <div className="channelPickerModal" role="dialog" aria-modal="true">
+              <div className="channelPickerHeader">
+                <div>
+                  <p className="eyebrow">CANAIS DE ATENDIMENTO</p>
+                  <h3>Selecionar canais</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setChannelPickerOpen(false)}
+                >
+                  ×
+                </button>
+              </div>
+
+              <button
+                type="button"
+                className="channelSelectAll"
+                onClick={() =>
+                  setSelectedChannelIds(
+                    selectedChannelIds.length === accounts.length
+                      ? []
+                      : accounts.map((item) => item.id)
+                  )
+                }
+              >
+                {selectedChannelIds.length === accounts.length
+                  ? "Limpar seleção"
+                  : "Selecionar todos"}
+              </button>
+
+              <div className="channelPickerList">
+                {accounts.map((channel) => (
+                  <label key={channel.id}>
+                    <input
+                      type="checkbox"
+                      checked={selectedChannelIds.includes(channel.id)}
+                      onChange={(event) => {
+                        setSelectedChannelIds((current) =>
+                          event.target.checked
+                            ? [...new Set([...current, channel.id])]
+                            : current.filter((id) => id !== channel.id)
+                        );
+                      }}
+                    />
+                    <div>
+                      <strong>{channel.verified_name || "WhatsApp"}</strong>
+                      <span>{channel.display_phone_number || "Sem telefone"}</span>
+                    </div>
+                    <em className={channel.status === "CONNECTED" ? "connected" : ""}>
+                      {channel.status === "CONNECTED" ? "Conectado" : channel.status}
+                    </em>
+                  </label>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                className="primaryAction"
+                onClick={() => setChannelPickerOpen(false)}
+              >
+                Abrir Chat com {selectedChannelIds.length} selecionado(s)
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="chat">
@@ -1098,9 +1445,9 @@ export default function DashboardClient() {
         ) : (
           <div className="chatEmpty">
             <div className="emptyIcon largeEmptyIcon">◎</div>
-            <h2>Caixa de entrada pronta</h2>
+            <h2>Selecione uma conversa</h2>
             <p>
-              O painel está conectado ao Supabase e aguardando a primeira conversa real.
+              Escolha uma conversa na barra lateral para começar a visualizar e responder mensagens.
             </p>
           </div>
         )}
