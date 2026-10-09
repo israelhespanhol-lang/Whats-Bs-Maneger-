@@ -54,6 +54,9 @@ type Broadcast = {
   status: BroadcastStatus;
   unit_cost_brl: number;
   estimated_cost_brl: number;
+  actual_cost_brl: number | null;
+  started_at: string | null;
+  completed_at: string | null;
   sent_count: number;
   delivered_count: number;
   read_count: number;
@@ -68,6 +71,12 @@ type Broadcast = {
 type AudienceContact = {
   id: string;
   phone_e164: string;
+};
+
+type RecipientMetaStats = {
+  billable: number;
+  metaReported: number;
+  actualCost: number | null;
 };
 
 const audienceLabels: Record<ContactStatus, string> = {
@@ -116,6 +125,8 @@ export default function BroadcastsClient() {
   const organizationId = ctx.membership?.organization_id ?? null;
 
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
+  const [recipientMetaStats, setRecipientMetaStats] =
+    useState<Record<string, RecipientMetaStats>>({});
   const [templates, setTemplates] = useState<Template[]>([]);
   const [rates, setRates] = useState<Record<TemplateCategory, number>>({
     MARKETING: 0,
@@ -190,7 +201,7 @@ export default function BroadcastsClient() {
       supabase
         .from("broadcasts")
         .select(
-          "id,name,template_id,category,audience_status,audience_count,status,unit_cost_brl,estimated_cost_brl,sent_count,delivered_count,read_count,failed_count,created_at,message_templates(name)"
+          "id,name,template_id,category,audience_status,audience_count,status,unit_cost_brl,estimated_cost_brl,actual_cost_brl,started_at,completed_at,sent_count,delivered_count,read_count,failed_count,created_at,message_templates(name)"
         )
         .eq("organization_id", organizationId)
         .order("created_at", { ascending: false }),
@@ -215,8 +226,50 @@ export default function BroadcastsClient() {
       return;
     }
 
-    setBroadcasts((broadcastResult.data ?? []) as Broadcast[]);
+    const broadcastRows = (broadcastResult.data ?? []) as Broadcast[];
+    setBroadcasts(broadcastRows);
     setTemplates((templateResult.data ?? []) as Template[]);
+
+    if (broadcastRows.length) {
+      const { data: recipientRows } = await supabase
+        .from("broadcast_recipients")
+        .select(
+          "broadcast_id,meta_billable,meta_pricing_category,meta_pricing_model,actual_cost_brl"
+        )
+        .in(
+          "broadcast_id",
+          broadcastRows.map((item) => item.id)
+        );
+
+      const stats: Record<string, RecipientMetaStats> = {};
+      for (const row of recipientRows ?? []) {
+        const current = stats[row.broadcast_id] ?? {
+          billable: 0,
+          metaReported: 0,
+          actualCost: null
+        };
+
+        if (row.meta_billable === true) current.billable += 1;
+        if (
+          row.meta_billable !== null ||
+          row.meta_pricing_category ||
+          row.meta_pricing_model
+        ) {
+          current.metaReported += 1;
+        }
+
+        if (row.actual_cost_brl !== null) {
+          current.actualCost =
+            (current.actualCost ?? 0) + Number(row.actual_cost_brl);
+        }
+
+        stats[row.broadcast_id] = current;
+      }
+
+      setRecipientMetaStats(stats);
+    } else {
+      setRecipientMetaStats({});
+    }
 
     const nextRates: Record<TemplateCategory, number> = {
       MARKETING: 0,
@@ -540,13 +593,25 @@ export default function BroadcastsClient() {
         (sum, item) => sum + Number(item.estimated_cost_brl ?? 0),
         0
       ),
-      consumedCost: active.reduce(
+      deliveredEstimate: active.reduce(
         (sum, item) =>
           sum + item.delivered_count * Number(item.unit_cost_brl ?? 0),
         0
-      )
+      ),
+      actualKnownCost: active.reduce((sum, item) => {
+        const value =
+          item.actual_cost_brl ??
+          recipientMetaStats[item.id]?.actualCost ??
+          null;
+        return value === null ? sum : sum + Number(value);
+      }, 0),
+      actualKnownCount: active.filter(
+        (item) =>
+          item.actual_cost_brl !== null ||
+          recipientMetaStats[item.id]?.actualCost !== null
+      ).length
     };
-  }, [broadcasts]);
+  }, [broadcasts, recipientMetaStats]);
 
   return (
     <SectionLayout
@@ -739,9 +804,9 @@ export default function BroadcastsClient() {
           <small>estimativa total</small>
         </article>
         <article className="metricCard">
-          <span>Custo consumido</span>
-          <strong>{money(totals.consumedCost)}</strong>
-          <small>estimado pelas mensagens entregues</small>
+          <span>Estimativa entregue</span>
+          <strong>{money(totals.deliveredEstimate)}</strong>
+          <small>rate card oficial × entregas</small>
         </article>
       </div>
 
@@ -758,10 +823,17 @@ export default function BroadcastsClient() {
           {broadcasts.map((broadcast) => {
             const template = one(broadcast.message_templates);
             const unitCost = Number(broadcast.unit_cost_brl ?? 0);
-            const consumed = broadcast.delivered_count * unitCost;
+            const deliveredEstimate = broadcast.delivered_count * unitCost;
+            const metaStats = recipientMetaStats[broadcast.id] ?? {
+              billable: 0,
+              metaReported: 0,
+              actualCost: null
+            };
+            const actualCost =
+              broadcast.actual_cost_brl ?? metaStats.actualCost;
             const remaining = Math.max(
               0,
-              Number(broadcast.estimated_cost_brl ?? 0) - consumed
+              Number(broadcast.estimated_cost_brl ?? 0) - deliveredEstimate
             );
 
             return (
@@ -817,15 +889,29 @@ export default function BroadcastsClient() {
 
                 <div className="broadcastCostBreakdown">
                   <div>
-                    <span>Tarifa usada</span>
+                    <span>Tarifa oficial</span>
                     <strong>{money(unitCost)}</strong>
                   </div>
                   <div>
-                    <span>Custo consumido</span>
-                    <strong>{money(consumed)}</strong>
+                    <span>Estimativa entregue</span>
+                    <strong>{money(deliveredEstimate)}</strong>
                   </div>
                   <div>
-                    <span>Saldo previsto</span>
+                    <span>Meta faturável</span>
+                    <strong>
+                      {metaStats.metaReported > 0
+                        ? `${metaStats.billable}/${metaStats.metaReported}`
+                        : "Aguardando"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Custo efetivo informado</span>
+                    <strong>
+                      {actualCost === null ? "Não disponível" : money(Number(actualCost))}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Saldo estimado</span>
                     <strong>{money(remaining)}</strong>
                   </div>
                 </div>
@@ -902,7 +988,7 @@ export default function BroadcastsClient() {
       <div className="sectionInfo">
         <strong>Sobre os valores</strong>
         <p>
-          As tarifas são sincronizadas diretamente do calculador oficial da Meta para Brasil/BRL. O custo consumido considera mensagens entregues; a fatura oficial da Meta continua sendo a referência final, inclusive para descontos por volume e exceções de cobrança.
+          A estimativa usa o rate card oficial sincronizado da Meta e as entregas confirmadas pelo webhook. Quando o webhook informa billable, categoria ou modelo de preço, esses dados ficam registrados separadamente. Um valor calculado localmente nunca é exibido como cobrança efetiva da Meta; quando a API não fornece o valor monetário por mensagem, o painel mostra claramente “Não disponível”.
         </p>
       </div>
 
