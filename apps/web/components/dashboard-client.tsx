@@ -232,6 +232,7 @@ export default function DashboardClient() {
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const [messageSearch, setMessageSearch] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [contactPanelOpen, setContactPanelOpen] = useState(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
@@ -1079,6 +1080,10 @@ export default function DashboardClient() {
 
   const organization = one(membership.organizations);
   const contact = selected ? one(selected.contacts) : null;
+  const contactTags = contact ? tagsByContact[contact.id] ?? [] : [];
+  const currentAssignee = selected?.assigned_member_id
+    ? memberNames[selected.assigned_member_id] ?? "Atendente"
+    : "Não atribuído";
   const unread = conversations.reduce((sum, item) => sum + item.unread_count, 0);
   const connected = account?.status === "CONNECTED";
   const windowText = selected
@@ -1086,7 +1091,7 @@ export default function DashboardClient() {
     : null;
 
   return (
-    <main className="appShell">
+    <main className={`appShell ${contactPanelOpen ? "" : "contactPanelClosed"}`}>
       <AppSidebar
         active="conversations"
         unread={unread}
@@ -1392,31 +1397,32 @@ export default function DashboardClient() {
       <section className="chat">
         {selected && contact ? (
           <>
-            <header className="chatHeader">
-              <div className="contactIdentity">
+            <header className="chatHeader flowLikeChatHeader">
+              <div className="contactIdentity contactIdentityRich">
                 <div className="avatar large">
                   {initials(contact.name, contact.phone_e164)}
                 </div>
-                <div>
+                <div className="contactIdentityCopy">
                   <strong>{contact.name || contact.phone_e164}</strong>
-                  <span>{windowText || contact.phone_e164}</span>
+                  <span>{contact.phone_e164}</span>
+                  <div className="chatHeaderTags">
+                    {contactTags.slice(0, 2).map((tag) => (
+                      <span
+                        key={tag.id}
+                        style={{ borderColor: tag.color, color: tag.color }}
+                      >
+                        {tag.name}
+                      </span>
+                    ))}
+                    {contactTags.length > 2 && <span>+{contactTags.length - 2}</span>}
+                  </div>
                 </div>
               </div>
-              <div className="chatActions">
-                {selected.unread_count > 0 && (
-                  <button
-                    type="button"
-                    className="markReadButton"
-                    title="Marcar conversa como lida"
-                    onClick={() => void markConversationRead()}
-                  >
-                    ✓ <span>Marcar como lida</span>
-                  </button>
-                )}
+              <div className="chatActions flowLikeChatActions">
                 <button
                   type="button"
                   title="Buscar mensagens"
-                  className={messageSearchOpen ? "active" : ""}
+                  className={messageSearchOpen ? "iconAction active" : "iconAction"}
                   onClick={() => {
                     setMessageSearchOpen((current) => !current);
                     setActionsOpen(false);
@@ -1425,6 +1431,54 @@ export default function DashboardClient() {
                 >
                   ⌕
                 </button>
+                {selected.unread_count > 0 && (
+                  <button
+                    type="button"
+                    className="headerAction successAction"
+                    title="Marcar conversa como lida"
+                    onClick={() => void markConversationRead()}
+                  >
+                    ✓ <span>Marcar como lida</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="headerAction warningAction"
+                  onClick={() => setContactPanelOpen(true)}
+                  title="Gerenciar etiquetas"
+                >
+                  ◇ <span>Etiquetas</span>
+                </button>
+                <button
+                  type="button"
+                  className="headerAction dangerAction"
+                  onClick={() => void toggleConversationClosed()}
+                  title={selected.status === "CLOSED" ? "Reabrir conversa" : "Arquivar conversa"}
+                >
+                  ▣ <span>{selected.status === "CLOSED" ? "Reabrir" : "Arquivar"}</span>
+                </button>
+                <select
+                  className="headerAssigneeSelect"
+                  value={selected.assigned_member_id ?? ""}
+                  onChange={(event) => void updateConversationAssignee(event.target.value)}
+                  aria-label="Responsável pela conversa"
+                  title={currentAssignee}
+                >
+                  <option value="">Não atribuído</option>
+                  {Object.entries(memberNames).map(([id, name]) => (
+                    <option value={id} key={id}>{name}</option>
+                  ))}
+                </select>
+                {!contactPanelOpen && (
+                  <button
+                    type="button"
+                    className="iconAction"
+                    title="Abrir informações do contato"
+                    onClick={() => setContactPanelOpen(true)}
+                  >
+                    ◫
+                  </button>
+                )}
                 <div className="chatMenuWrap">
                   <button
                     type="button"
@@ -1569,7 +1623,7 @@ export default function DashboardClient() {
               )}
             </div>
 
-            <footer className={`composer ${connected ? "" : "composerLocked"}`}>
+            <footer className={`composer flowLikeComposer ${connected ? "" : "composerLocked"}`}>
               <input
                 ref={fileInputRef}
                 className="attachmentInput"
@@ -1580,20 +1634,76 @@ export default function DashboardClient() {
                   if (file) void sendAttachment(file);
                 }}
               />
-              <button
-                type="button"
-                title="Enviar imagem ou PDF"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={
-                  !connected ||
-                  sending ||
-                  uploading ||
-                  windowText === "Janela encerrada"
-                }
-              >
-                {uploading ? "…" : "＋"}
-              </button>
-              <input
+              <div className="composerToolbar">
+                <div className="composerToolbarGroup">
+                  <button
+                    type="button"
+                    className="composerToolButton"
+                    disabled
+                    title="Anotação interna ainda não está habilitada."
+                  >
+                    ▤ <span>Anotação interna</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="composerToolButton"
+                    onClick={() => router.push("/templates")}
+                    title="Abrir templates"
+                  >
+                    ▧ <span>Templates</span>
+                  </button>
+                </div>
+                <div className="composerToolbarGroup composerToolbarEnd">
+                  <button
+                    type="button"
+                    className="composerToolButton"
+                    title="Enviar imagem ou PDF"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={
+                      !connected ||
+                      sending ||
+                      uploading ||
+                      windowText === "Janela encerrada"
+                    }
+                  >
+                    ⌕ <span>{uploading ? "Enviando..." : "Anexos"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="composerToolButton"
+                    disabled
+                    title="Atalhos rápidos serão adicionados em uma próxima etapa."
+                  >
+                    ⚡ <span>Atalhos</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="composerToolButton"
+                    disabled
+                    title="Avaliações ainda não estão habilitadas."
+                  >
+                    ☆ <span>Enviar avaliação</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="composerToolButton compactTool"
+                    disabled
+                    title="Mais ações em breve."
+                  >
+                    •••
+                  </button>
+                </div>
+              </div>
+              <div className="composerInputRow">
+                <button
+                  type="button"
+                  className="emojiButton"
+                  disabled
+                  title="Emoji em breve"
+                >
+                  ☺
+                </button>
+                <input
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => {
@@ -1629,6 +1739,7 @@ export default function DashboardClient() {
               >
                 {sending ? "…" : "➤"}
               </button>
+              </div>
             </footer>
           </>
         ) : (
@@ -1642,15 +1753,41 @@ export default function DashboardClient() {
         )}
       </section>
 
-      <aside className="contactPanel">
+      <aside className={`contactPanel ${contactPanelOpen ? "" : "contactPanelHidden"}`}>
         {contact ? (
           <>
+            <div className="contactPanelHeader">
+              <strong>Informações do Contato</strong>
+              <button
+                type="button"
+                onClick={() => setContactPanelOpen(false)}
+                aria-label="Fechar informações do contato"
+              >
+                ×
+              </button>
+            </div>
             <div className="contactHero">
               <div className="avatar xlarge">
                 {initials(contact.name, contact.phone_e164)}
               </div>
               <h2>{contact.name || "Contato"}</h2>
               <p>{contact.phone_e164}</p>
+              <div className="contactHeroActions">
+                <a href={`tel:${contact.phone_e164}`}>☎ <span>Ligar</span></a>
+                <a
+                  href={`https://wa.me/${contact.phone_e164.replace(/\D/g, "")}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  ◉ <span>WhatsApp</span>
+                </a>
+                <button type="button" disabled title="Mais ações em breve">⋮</button>
+              </div>
+            </div>
+
+            <div className="contactSearchBox">
+              <span>⌕</span>
+              <input placeholder="Buscar no Mais Chat..." />
             </div>
 
             <div className="infoBlock">
