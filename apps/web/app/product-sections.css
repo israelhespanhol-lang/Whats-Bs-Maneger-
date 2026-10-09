@@ -2055,3 +2055,34 @@
     text-align: left;
   }
 }
+
+
+/* Official Meta pricing */
+.metaOfficialRate .metaRateValue {
+  min-height: 44px;
+  margin: 8px 0 4px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: var(--surface);
+  border-radius: 9px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.metaOfficialRate .metaRateValue strong {
+  color: var(--accent-strong);
+  font-size: 17px;
+  letter-spacing: -0.025em;
+}
+
+.metaOfficialRate .metaRateValue span {
+  color: var(--text-soft);
+  font-size: 9px;
+  text-align: right;
+}
+
+.metaOfficialRate > small {
+  line-height: 1.4;
+}
