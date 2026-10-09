@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "./supabase";
 
 export type MaisChatMembership = {
+  id: string;
   organization_id: string;
   role: "OWNER" | "ADMIN" | "AGENT";
   organizations:
@@ -68,7 +69,7 @@ export function useMaisChatContext() {
 
       const { data: member, error: memberError } = await supabase
         .from("organization_members")
-        .select("organization_id,role,organizations(name,slug)")
+        .select("id,organization_id,role,organizations(name,slug)")
         .eq("user_id", session.user.id)
         .limit(1)
         .maybeSingle();
