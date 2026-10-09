@@ -45,6 +45,7 @@ type Template = {
   buttons: TemplateButton[];
   body_examples: string[];
   submitted_at: string | null;
+  is_favorite: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -140,6 +141,7 @@ export default function TemplatesClient() {
   const [statusFilter, setStatusFilter] =
     useState<"ALL" | TemplateStatus>("ALL");
   const [search, setSearch] = useState("");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [saving, setSaving] = useState(false);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -151,7 +153,7 @@ export default function TemplatesClient() {
     const { data, error } = await supabase
       .from("message_templates")
       .select(
-        "id,name,category,language,body,status,meta_template_name,meta_template_id,meta_status_reason,header_type,header_text,header_example,footer_text,buttons,body_examples,submitted_at,created_at,updated_at"
+        "id,name,category,language,body,status,meta_template_name,meta_template_id,meta_status_reason,header_type,header_text,header_example,footer_text,buttons,body_examples,submitted_at,is_favorite,created_at,updated_at"
       )
       .eq("organization_id", organizationId)
       .order("updated_at", { ascending: false });
@@ -211,6 +213,10 @@ export default function TemplatesClient() {
         return false;
       }
 
+      if (favoritesOnly && !template.is_favorite) {
+        return false;
+      }
+
       if (!term) return true;
 
       return (
@@ -218,7 +224,7 @@ export default function TemplatesClient() {
         template.body.toLowerCase().includes(term)
       );
     });
-  }, [templates, search, statusFilter]);
+  }, [templates, search, statusFilter, favoritesOnly]);
 
   const approved = templates.filter(
     (item) => item.status === "APPROVED"
@@ -291,8 +297,24 @@ export default function TemplatesClient() {
   }
 
   function addButton(type: ButtonType) {
-    if (buttons.length >= 3) {
-      setMessage("Neste builder, use no máximo 3 botões por template.");
+    if (buttons.length >= 10) {
+      setMessage("O template já atingiu o limite de 10 botões.");
+      return;
+    }
+
+    if (
+      type === "URL" &&
+      buttons.filter((button) => button.type === "URL").length >= 2
+    ) {
+      setMessage("Use no máximo 2 botões de site neste template.");
+      return;
+    }
+
+    if (
+      type === "PHONE_NUMBER" &&
+      buttons.some((button) => button.type === "PHONE_NUMBER")
+    ) {
+      setMessage("Use no máximo 1 botão de ligação neste template.");
       return;
     }
 
@@ -525,6 +547,26 @@ export default function TemplatesClient() {
       `Sincronização concluída: ${data.synchronized ?? 0} template(s) atualizado(s).`
     );
     await loadTemplates();
+  }
+
+  async function toggleFavorite(template: Template) {
+    const next = !template.is_favorite;
+
+    setTemplates((current) =>
+      current.map((item) =>
+        item.id === template.id ? { ...item, is_favorite: next } : item
+      )
+    );
+
+    const { error } = await supabase
+      .from("message_templates")
+      .update({ is_favorite: next })
+      .eq("id", template.id);
+
+    if (error) {
+      setMessage(error.message);
+      await loadTemplates();
+    }
   }
 
   async function archiveTemplate(id: string) {
@@ -921,7 +963,7 @@ export default function TemplatesClient() {
                     <div className="builderSectionHeader">
                       <div>
                         <strong>Botões</strong>
-                        <span>Até 3 neste builder</span>
+                        <span>Até 10 botões</span>
                       </div>
                     </div>
 
@@ -947,6 +989,13 @@ export default function TemplatesClient() {
                         }
                       >
                         + Ligar
+                      </button>
+                      <button
+                        type="button"
+                        disabled
+                        title="Copiar código pertence ao fluxo específico de templates de autenticação e ainda não está habilitado neste editor."
+                      >
+                        + Copiar código — em breve
                       </button>
                     </div>
 
@@ -1291,6 +1340,13 @@ export default function TemplatesClient() {
                   )
                 )}
               </select>
+              <button
+                type="button"
+                className={`templateFavoriteFilter ${favoritesOnly ? "active" : ""}`}
+                onClick={() => setFavoritesOnly((current) => !current)}
+              >
+                ★ Favoritos
+              </button>
             </div>
 
             <div className="flowTemplateList">
@@ -1351,6 +1407,13 @@ export default function TemplatesClient() {
                   </div>
 
                   <div className="flowTemplateActions">
+                    <button
+                      className={template.is_favorite ? "favoriteTemplateButton active" : "favoriteTemplateButton"}
+                      onClick={() => void toggleFavorite(template)}
+                      title={template.is_favorite ? "Remover dos favoritos" : "Favoritar template"}
+                    >
+                      {template.is_favorite ? "★" : "☆"}
+                    </button>
                     {["DRAFT", "REJECTED"].includes(
                       template.status
                     ) && (
