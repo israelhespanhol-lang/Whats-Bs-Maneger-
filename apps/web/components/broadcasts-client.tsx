@@ -25,6 +25,15 @@ type Template = {
 type PricingRate = {
   category: TemplateCategory;
   unit_cost_brl: number;
+  market: string;
+  currency: string;
+  source: string;
+  fetched_at: string | null;
+  tier_list: Array<{
+    min_volume: number;
+    max_volume: number;
+    quote: string;
+  }>;
 };
 
 type BroadcastStatus =
@@ -120,10 +129,58 @@ export default function BroadcastsClient() {
   const [audience, setAudience] = useState<ContactStatus[]>(["LEAD"]);
   const [audienceCount, setAudienceCount] = useState(0);
   const [counting, setCounting] = useState(false);
-  const [rateInput, setRateInput] = useState("0");
+  const [pricingSyncing, setPricingSyncing] = useState(false);
+  const [pricingFetchedAt, setPricingFetchedAt] = useState<string | null>(null);
   const [optInConfirmed, setOptInConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  async function syncPricing(force = false) {
+    setPricingSyncing(true);
+
+    const { data, error } = await supabase.functions.invoke(
+      "whatsapp-pricing-sync",
+      {
+        body: { force }
+      }
+    );
+
+    setPricingSyncing(false);
+
+    if (error || !data?.ok) {
+      setMessage(
+        data?.error ||
+          error?.message ||
+          "Não foi possível consultar a tarifa oficial da Meta."
+      );
+      return false;
+    }
+
+    const metaRates = (data.rates ?? []) as Array<{
+      category: string;
+      unit_cost_brl: number;
+      fetched_at?: string | null;
+    }>;
+
+    setRates((current) => {
+      const next = { ...current };
+
+      for (const row of metaRates) {
+        if (
+          row.category === "MARKETING" ||
+          row.category === "UTILITY" ||
+          row.category === "AUTHENTICATION"
+        ) {
+          next[row.category] = Number(row.unit_cost_brl ?? 0);
+        }
+      }
+
+      return next;
+    });
+
+    setPricingFetchedAt(data.fetchedAt ?? new Date().toISOString());
+    return true;
+  }
 
   async function loadData() {
     if (!organizationId) return;
@@ -145,7 +202,7 @@ export default function BroadcastsClient() {
         .order("name"),
       supabase
         .from("whatsapp_pricing_rates")
-        .select("category,unit_cost_brl")
+        .select("category,unit_cost_brl,market,currency,source,fetched_at,tier_list")
         .eq("organization_id", organizationId)
     ]);
 
@@ -166,17 +223,32 @@ export default function BroadcastsClient() {
       AUTHENTICATION: 0
     };
 
+    let newestFetchedAt: string | null = null;
+
     for (const row of (rateResult.data ?? []) as PricingRate[]) {
       nextRates[row.category] = Number(row.unit_cost_brl ?? 0);
+
+      if (
+        row.fetched_at &&
+        (!newestFetchedAt ||
+          new Date(row.fetched_at).getTime() >
+            new Date(newestFetchedAt).getTime())
+      ) {
+        newestFetchedAt = row.fetched_at;
+      }
     }
 
     setRates(nextRates);
+    setPricingFetchedAt(newestFetchedAt);
   }
 
   useEffect(() => {
     if (!organizationId) return;
 
-    void loadData();
+    void (async () => {
+      await syncPricing(false);
+      await loadData();
+    })();
 
     const channel = supabase
       .channel(`broadcasts:${organizationId}`)
@@ -202,17 +274,10 @@ export default function BroadcastsClient() {
     [templates, templateId]
   );
 
-  const selectedRate = Number(rateInput.replace(",", ".")) || 0;
+  const selectedRate = selectedTemplate
+    ? Number(rates[selectedTemplate.category] ?? 0)
+    : 0;
   const estimatedCost = audienceCount * selectedRate;
-
-  useEffect(() => {
-    if (!selectedTemplate) {
-      setRateInput("0");
-      return;
-    }
-
-    setRateInput(String(rates[selectedTemplate.category] ?? 0));
-  }, [selectedTemplate?.id, rates]);
 
   async function refreshAudienceCount() {
     if (!organizationId || audience.length === 0) {
@@ -299,8 +364,10 @@ export default function BroadcastsClient() {
       return;
     }
 
-    if (selectedRate < 0) {
-      setMessage("A tarifa não pode ser negativa.");
+    if (selectedRate <= 0) {
+      setMessage(
+        "A tarifa oficial da Meta ainda não foi carregada. Atualize os preços antes de preparar o disparo."
+      );
       return;
     }
 
@@ -315,16 +382,6 @@ export default function BroadcastsClient() {
         setSaving(false);
         return;
       }
-
-      await supabase.from("whatsapp_pricing_rates").upsert(
-        {
-          organization_id: organizationId,
-          category: selectedTemplate.category,
-          unit_cost_brl: selectedRate,
-          updated_by: ctx.userId
-        },
-        { onConflict: "organization_id,category" }
-      );
 
       const { data: broadcast, error: broadcastError } = await supabase
         .from("broadcasts")
@@ -365,10 +422,6 @@ export default function BroadcastsClient() {
         if (recipientError) throw recipientError;
       }
 
-      setRates((current) => ({
-        ...current,
-        [selectedTemplate.category]: selectedRate
-      }));
       setName("");
       setTemplateId("");
       setAudience(["LEAD"]);
@@ -426,7 +479,7 @@ export default function BroadcastsClient() {
       ),
       consumedCost: active.reduce(
         (sum, item) =>
-          sum + item.sent_count * Number(item.unit_cost_brl ?? 0),
+          sum + item.delivered_count * Number(item.unit_cost_brl ?? 0),
         0
       )
     };
@@ -446,12 +499,30 @@ export default function BroadcastsClient() {
       title="Disparos"
       description="Prepare envios em massa com template aprovado, público definido e acompanhamento de custo estimado."
       actions={
-        <button
-          className="primaryAction"
-          onClick={() => setShowForm((current) => !current)}
-        >
-          {showForm ? "Fechar" : "+ Novo disparo"}
-        </button>
+        <div className="templateTopActions">
+          <button
+            className="secondaryAction"
+            type="button"
+            disabled={pricingSyncing}
+            onClick={() =>
+              void (async () => {
+                const ok = await syncPricing(true);
+                if (ok) {
+                  await loadData();
+                  setMessage("Tarifas oficiais atualizadas diretamente da Meta.");
+                }
+              })()
+            }
+          >
+            {pricingSyncing ? "Atualizando..." : "↻ Atualizar preços Meta"}
+          </button>
+          <button
+            className="primaryAction"
+            onClick={() => setShowForm((current) => !current)}
+          >
+            {showForm ? "Fechar" : "+ Novo disparo"}
+          </button>
+        </div>
       }
     >
       <div className="broadcastSafetyBanner">
@@ -524,23 +595,28 @@ export default function BroadcastsClient() {
               <small>contatos no público atual</small>
             </div>
 
-            <div className="broadcastRateField">
+            <div className="broadcastRateField metaOfficialRate">
               <label>
-                Tarifa de referência
+                Tarifa oficial Meta
                 {selectedTemplate && (
                   <span>{categoryLabels[selectedTemplate.category]}</span>
                 )}
               </label>
-              <div>
-                <span>R$</span>
-                <input
-                  inputMode="decimal"
-                  value={rateInput}
-                  onChange={(event) => setRateInput(event.target.value)}
-                  placeholder="0,0000"
-                />
+              <div className="metaRateValue">
+                <strong>{money(selectedRate)}</strong>
+                <span>por mensagem entregue</span>
               </div>
-              <small>valor estimado por mensagem</small>
+              <small>
+                Brasil · BRL · fonte oficial Meta
+                {pricingFetchedAt
+                  ? ` · atualizado ${new Intl.DateTimeFormat("pt-BR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit"
+                    }).format(new Date(pricingFetchedAt))}`
+                  : ""}
+              </small>
             </div>
 
             <div className="broadcastCostMetric highlighted">
@@ -602,7 +678,7 @@ export default function BroadcastsClient() {
         <article className="metricCard">
           <span>Custo consumido</span>
           <strong>{money(totals.consumedCost)}</strong>
-          <small>estimado pelas mensagens enviadas</small>
+          <small>estimado pelas mensagens entregues</small>
         </article>
       </div>
 
@@ -619,7 +695,7 @@ export default function BroadcastsClient() {
           {broadcasts.map((broadcast) => {
             const template = one(broadcast.message_templates);
             const unitCost = Number(broadcast.unit_cost_brl ?? 0);
-            const consumed = broadcast.sent_count * unitCost;
+            const consumed = broadcast.delivered_count * unitCost;
             const remaining = Math.max(
               0,
               Number(broadcast.estimated_cost_brl ?? 0) - consumed
@@ -748,7 +824,7 @@ export default function BroadcastsClient() {
       <div className="sectionInfo">
         <strong>Sobre os valores</strong>
         <p>
-          O painel usa a tarifa de referência que você informar e mostra custos estimados. A fatura oficial continua sendo a da Meta/BSP.
+          As tarifas são sincronizadas diretamente do calculador oficial da Meta para Brasil/BRL. O custo consumido considera mensagens entregues; a fatura oficial da Meta continua sendo a referência final, inclusive para descontos por volume e exceções de cobrança.
         </p>
       </div>
 
