@@ -437,18 +437,248 @@ export default function BroadcastsClient() {
     [templates, templateId]
   );
 
+  const headerVariables = useMemo(
+    () => variableNumbers(selectedTemplate?.header_text),
+    [selectedTemplate?.header_text]
+  );
+
+  const bodyVariables = useMemo(
+    () => variableNumbers(selectedTemplate?.body),
+    [selectedTemplate?.body]
+  );
+
   const selectedRate = selectedTemplate
     ? Number(rates[selectedTemplate.category] ?? 0)
     : 0;
+
   const estimatedCost = audienceCount * selectedRate;
 
+  function resetWizard() {
+    setWizardStep(1);
+    setName("");
+    setSourceType("CRM_STATUS");
+    setTemplateId("");
+    setAudience(["LEAD"]);
+    setSelectedTagId("");
+    setFileName("");
+    setFirstRowHeader(true);
+    setRawSheetRows([]);
+    setFileHeaders([]);
+    setImportedRows([]);
+    setPhoneColumn("");
+    setNameColumn("");
+    setVariableMappings({});
+    setReviewRecipients([]);
+    setReviewReady(false);
+    setAudienceCount(0);
+    setOptInConfirmed(false);
+    setMessage(null);
+  }
+
+  function closeWizard() {
+    setShowForm(false);
+    resetWizard();
+  }
+
+  function openWizard() {
+    resetWizard();
+    const connectedAccount =
+      accounts.find((item) => item.status === "CONNECTED") ?? accounts[0];
+    if (connectedAccount) setChannelId(connectedAccount.id);
+    setShowForm(true);
+  }
+
+  async function verifyQuality() {
+    const channel = accounts.find((item) => item.id === channelId);
+
+    if (!name.trim()) {
+      setMessage("Defina um nome para identificar este disparo.");
+      return;
+    }
+
+    if (!channel) {
+      setMessage("Selecione um canal de atendimento.");
+      return;
+    }
+
+    if (channel.status !== "CONNECTED") {
+      setMessage("O canal selecionado não está conectado.");
+      return;
+    }
+
+    if (templates.length === 0) {
+      setMessage(
+        "O canal está conectado, mas não há templates aprovados disponíveis para o disparo."
+      );
+      return;
+    }
+
+    setMessage(
+      `Verificação concluída: canal conectado e ${templates.length} template(s) aprovado(s) disponível(is). Nenhuma mensagem foi enviada.`
+    );
+  }
+
+  function rebuildImportedRows(rows: unknown[][], hasHeader: boolean) {
+    if (!rows.length) {
+      setFileHeaders([]);
+      setImportedRows([]);
+      setPhoneColumn("");
+      setNameColumn("");
+      return;
+    }
+
+    const maxColumns = Math.max(
+      1,
+      ...rows.map((row) => (Array.isArray(row) ? row.length : 0))
+    );
+
+    const headerRow = hasHeader ? rows[0] ?? [] : [];
+    const used = new Set<string>();
+
+    const headers = Array.from({ length: maxColumns }, (_, index) => {
+      let base = hasHeader
+        ? String(headerRow[index] ?? "").trim()
+        : `Coluna ${index + 1}`;
+
+      if (!base) base = `Coluna ${index + 1}`;
+
+      let label = base;
+      let suffix = 2;
+      while (used.has(label)) {
+        label = `${base} ${suffix}`;
+        suffix += 1;
+      }
+      used.add(label);
+      return label;
+    });
+
+    const dataRows = (hasHeader ? rows.slice(1) : rows)
+      .filter((row) =>
+        Array.isArray(row) && row.some((value) => String(value ?? "").trim())
+      )
+      .map((row, index) => {
+        const values: Record<string, string> = {};
+        headers.forEach((header, columnIndex) => {
+          values[header] = String(row[columnIndex] ?? "").trim();
+        });
+
+        return {
+          rowNumber: index + (hasHeader ? 2 : 1),
+          values
+        };
+      });
+
+    setFileHeaders(headers);
+    setImportedRows(dataRows);
+
+    setPhoneColumn((current) => {
+      if (current && headers.includes(current)) return current;
+      return (
+        headers.find((header) =>
+          /(whats|telefone|phone|celular|fone)/i.test(header)
+        ) ??
+        headers[0] ??
+        ""
+      );
+    });
+
+    setNameColumn((current) => {
+      if (current && headers.includes(current)) return current;
+      return headers.find((header) => /(nome|name)/i.test(header)) ?? "";
+    });
+  }
+
+  useEffect(() => {
+    rebuildImportedRows(rawSheetRows, firstRowHeader);
+  }, [firstRowHeader, rawSheetRows]);
+
+  async function handleRecipientFile(file: File) {
+    const extension = file.name.split(".").pop()?.toLowerCase();
+
+    if (!extension || !["csv", "xlsx", "xls"].includes(extension)) {
+      setMessage("Use uma planilha .csv, .xlsx ou .xls.");
+      return;
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      setMessage("A planilha deve ter no máximo 8 MB.");
+      return;
+    }
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const firstSheet = workbook.SheetNames[0];
+
+      if (!firstSheet) {
+        setMessage("A planilha não contém nenhuma aba.");
+        return;
+      }
+
+      const rows = XLSX.utils.sheet_to_json<unknown[]>(
+        workbook.Sheets[firstSheet],
+        {
+          header: 1,
+          defval: "",
+          raw: false
+        }
+      );
+
+      setFileName(file.name);
+      setRawSheetRows(rows);
+      setReviewReady(false);
+      setMessage(
+        `Planilha carregada: ${Math.max(
+          0,
+          rows.length - (firstRowHeader ? 1 : 0)
+        )} linha(s) de dados.`
+      );
+    } catch {
+      setMessage("Não foi possível ler esta planilha.");
+    }
+  }
+
   async function refreshAudienceCount() {
-    if (!organizationId || audience.length === 0) {
+    if (!organizationId) {
       setAudienceCount(0);
       return;
     }
 
+    if (sourceType === "FILE") {
+      setAudienceCount(importedRows.length);
+      return;
+    }
+
     setCounting(true);
+
+    if (sourceType === "TAG") {
+      if (!selectedTagId) {
+        setAudienceCount(0);
+        setCounting(false);
+        return;
+      }
+
+      const { count, error } = await supabase
+        .from("contact_tags")
+        .select("contact_id", { count: "exact", head: true })
+        .eq("tag_id", selectedTagId);
+
+      setCounting(false);
+
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+
+      setAudienceCount(count ?? 0);
+      return;
+    }
+
+    if (audience.length === 0) {
+      setAudienceCount(0);
+      setCounting(false);
+      return;
+    }
 
     const { count, error } = await supabase
       .from("contacts")
@@ -468,7 +698,51 @@ export default function BroadcastsClient() {
 
   useEffect(() => {
     void refreshAudienceCount();
-  }, [organizationId, audience.join("|")]);
+  }, [
+    organizationId,
+    sourceType,
+    selectedTagId,
+    importedRows.length,
+    audience.join("|")
+  ]);
+
+  useEffect(() => {
+    setReviewReady(false);
+  }, [
+    sourceType,
+    selectedTagId,
+    phoneColumn,
+    nameColumn,
+    importedRows.length,
+    templateId,
+    audience.join("|"),
+    JSON.stringify(variableMappings)
+  ]);
+
+  useEffect(() => {
+    if (!selectedTemplate) {
+      setVariableMappings({});
+      return;
+    }
+
+    const next: Record<string, VariableMapping> = {};
+
+    for (const number of headerVariables) {
+      next[`header:${number}`] = {
+        source: number === 1 ? "CONTACT_NAME" : "FIXED",
+        value: ""
+      };
+    }
+
+    for (const number of bodyVariables) {
+      next[`body:${number}`] = {
+        source: number === 1 ? "CONTACT_NAME" : "FIXED",
+        value: ""
+      };
+    }
+
+    setVariableMappings(next);
+  }, [templateId]);
 
   function toggleAudience(status: ContactStatus) {
     setAudience((current) => {
@@ -484,6 +758,36 @@ export default function BroadcastsClient() {
   async function fetchAudienceContacts() {
     if (!organizationId) return [] as AudienceContact[];
 
+    if (sourceType === "TAG") {
+      if (!selectedTagId) return [];
+
+      const { data: tagRows, error: tagError } = await supabase
+        .from("contact_tags")
+        .select("contact_id")
+        .eq("tag_id", selectedTagId);
+
+      if (tagError) throw tagError;
+
+      const ids = [...new Set((tagRows ?? []).map((row) => row.contact_id))];
+      if (!ids.length) return [];
+
+      const rows: AudienceContact[] = [];
+
+      for (let index = 0; index < ids.length; index += 500) {
+        const batch = ids.slice(index, index + 500);
+        const { data, error } = await supabase
+          .from("contacts")
+          .select("id,phone_e164,name")
+          .eq("organization_id", organizationId)
+          .in("id", batch);
+
+        if (error) throw error;
+        rows.push(...((data ?? []) as AudienceContact[]));
+      }
+
+      return rows;
+    }
+
     const rows: AudienceContact[] = [];
     const pageSize = 1000;
     let from = 0;
@@ -491,7 +795,7 @@ export default function BroadcastsClient() {
     while (true) {
       const { data, error } = await supabase
         .from("contacts")
-        .select("id,phone_e164")
+        .select("id,phone_e164,name")
         .eq("organization_id", organizationId)
         .in("status", audience)
         .range(from, from + pageSize - 1);
@@ -510,13 +814,156 @@ export default function BroadcastsClient() {
     return rows;
   }
 
+  function resolveMapping(
+    mapping: VariableMapping | undefined,
+    recipient: ReviewRecipient
+  ) {
+    if (!mapping) return "";
+
+    if (mapping.source === "CONTACT_NAME") {
+      return recipient.name?.trim() ?? "";
+    }
+
+    if (mapping.source === "CONTACT_PHONE") {
+      return recipient.phone;
+    }
+
+    if (mapping.source === "COLUMN") {
+      return String(recipient.rawData[mapping.value] ?? "").trim();
+    }
+
+    return mapping.value.trim();
+  }
+
+  function variablesForRecipient(recipient: ReviewRecipient) {
+    return {
+      header: headerVariables.map((number) =>
+        resolveMapping(variableMappings[`header:${number}`], recipient)
+      ),
+      body: bodyVariables.map((number) =>
+        resolveMapping(variableMappings[`body:${number}`], recipient)
+      )
+    };
+  }
+
+  async function buildReview() {
+    if (!selectedTemplate) {
+      setMessage("Selecione um template aprovado.");
+      return false;
+    }
+
+    const candidates: ReviewRecipient[] = [];
+
+    if (sourceType === "FILE") {
+      if (!phoneColumn) {
+        setMessage("Selecione a coluna que contém os telefones.");
+        return false;
+      }
+
+      const seen = new Set<string>();
+
+      for (const row of importedRows) {
+        const rawPhone = row.values[phoneColumn] ?? "";
+        const phone = normalizePhone(rawPhone);
+        const nameValue = nameColumn
+          ? String(row.values[nameColumn] ?? "").trim()
+          : "";
+
+        let eligible = Boolean(phone);
+        let reason: string | null = null;
+
+        if (!phone) {
+          eligible = false;
+          reason = "Número inválido";
+        } else if (seen.has(phone)) {
+          eligible = false;
+          reason = "Duplicado na planilha";
+        } else {
+          seen.add(phone);
+        }
+
+        candidates.push({
+          key: `file-${row.rowNumber}`,
+          contactId: null,
+          name: nameValue || null,
+          phone: phone ?? rawPhone.trim(),
+          rawPhone,
+          rowNumber: row.rowNumber,
+          rawData: row.values,
+          eligible,
+          reason
+        });
+      }
+    } else {
+      const contacts = await fetchAudienceContacts();
+      const seen = new Set<string>();
+
+      for (const contact of contacts) {
+        const phone = normalizePhone(contact.phone_e164);
+
+        let eligible = Boolean(phone);
+        let reason: string | null = null;
+
+        if (!phone) {
+          eligible = false;
+          reason = "Número inválido";
+        } else if (seen.has(phone)) {
+          eligible = false;
+          reason = "Duplicado";
+        } else {
+          seen.add(phone);
+        }
+
+        candidates.push({
+          key: contact.id,
+          contactId: contact.id,
+          name: contact.name,
+          phone: phone ?? contact.phone_e164,
+          rawPhone: contact.phone_e164,
+          rowNumber: null,
+          rawData: {
+            Nome: contact.name ?? "",
+            Telefone: contact.phone_e164
+          },
+          eligible,
+          reason
+        });
+      }
+    }
+
+    for (const candidate of candidates) {
+      if (!candidate.eligible) continue;
+
+      const variables = variablesForRecipient(candidate);
+      const required = [...variables.header, ...variables.body];
+
+      if (required.some((value) => !String(value ?? "").trim())) {
+        candidate.eligible = false;
+        candidate.reason = "Variável sem valor";
+      }
+    }
+
+    setReviewRecipients(candidates);
+    const eligibleCount = candidates.filter((item) => item.eligible).length;
+    setAudienceCount(eligibleCount);
+    setReviewReady(true);
+
+    if (!eligibleCount) {
+      setMessage("Nenhum destinatário elegível após as validações.");
+      return false;
+    }
+
+    setMessage(null);
+    return true;
+  }
+
   async function createBroadcast(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!organizationId || !ctx.userId || !selectedTemplate) return;
 
-    if (!name.trim()) {
-      setMessage("Informe um nome para o disparo.");
+    if (!reviewReady) {
+      setMessage("Gere a revisão dos destinatários antes de preparar o disparo.");
       return;
     }
 
@@ -524,6 +971,11 @@ export default function BroadcastsClient() {
       setMessage(
         "Confirme que os destinatários autorizaram o recebimento de mensagens no WhatsApp."
       );
+      return;
+    }
+
+    if (!channelId) {
+      setMessage("Selecione o canal que será usado no disparo.");
       return;
     }
 
@@ -538,26 +990,97 @@ export default function BroadcastsClient() {
     setMessage(null);
 
     try {
-      const contacts = await fetchAudienceContacts();
+      const eligible = reviewRecipients.filter((item) => item.eligible);
+      const excluded = reviewRecipients.filter((item) => !item.eligible);
 
-      if (contacts.length === 0) {
-        setMessage("Nenhum contato encontrado para este público.");
-        setSaving(false);
-        return;
+      const contactByPhone = new Map<string, string>();
+
+      for (const recipient of eligible) {
+        if (recipient.contactId) {
+          contactByPhone.set(recipient.phone, recipient.contactId);
+        }
       }
+
+      if (sourceType === "FILE") {
+        const phones = [...new Set(eligible.map((item) => item.phone))];
+
+        for (let index = 0; index < phones.length; index += 400) {
+          const batch = phones.slice(index, index + 400);
+          const { data: existing, error: existingError } = await supabase
+            .from("contacts")
+            .select("id,phone_e164")
+            .eq("organization_id", organizationId)
+            .in("phone_e164", batch);
+
+          if (existingError) throw existingError;
+
+          for (const contact of existing ?? []) {
+            contactByPhone.set(contact.phone_e164, contact.id);
+          }
+        }
+
+        const missing = eligible.filter(
+          (item) => !contactByPhone.has(item.phone)
+        );
+
+        for (let index = 0; index < missing.length; index += 300) {
+          const batch = missing.slice(index, index + 300);
+          const { data: inserted, error: insertError } = await supabase
+            .from("contacts")
+            .insert(
+              batch.map((item) => ({
+                organization_id: organizationId,
+                phone_e164: item.phone,
+                name: item.name,
+                status: "LEAD",
+                source: "broadcast_import"
+              }))
+            )
+            .select("id,phone_e164");
+
+          if (insertError) throw insertError;
+
+          for (const contact of inserted ?? []) {
+            contactByPhone.set(contact.phone_e164, contact.id);
+          }
+        }
+      }
+
+      const sourceMeta =
+        sourceType === "FILE"
+          ? {
+              file_name: fileName,
+              first_row_header: firstRowHeader,
+              phone_column: phoneColumn,
+              name_column: nameColumn,
+              headers: fileHeaders
+            }
+          : sourceType === "TAG"
+            ? {
+                tag_id: selectedTagId,
+                tag_name:
+                  tags.find((item) => item.id === selectedTagId)?.name ?? null
+              }
+            : {
+                contact_statuses: audience
+              };
 
       const { data: broadcast, error: broadcastError } = await supabase
         .from("broadcasts")
         .insert({
           organization_id: organizationId,
+          whatsapp_account_id: channelId,
           name: name.trim(),
           template_id: selectedTemplate.id,
           category: selectedTemplate.category,
+          source_type: sourceType,
+          source_meta: sourceMeta,
           audience_status: audience,
-          audience_count: contacts.length,
+          audience_count: eligible.length,
+          excluded_count: excluded.length,
           status: "READY",
           unit_cost_brl: selectedRate,
-          estimated_cost_brl: contacts.length * selectedRate,
+          estimated_cost_brl: eligible.length * selectedRate,
           opt_in_confirmed: true,
           created_by: ctx.userId
         })
@@ -568,16 +1091,38 @@ export default function BroadcastsClient() {
         throw broadcastError ?? new Error("Não foi possível criar o disparo.");
       }
 
-      const recipients = contacts.map((contact) => ({
-        broadcast_id: broadcast.id,
-        contact_id: contact.id,
-        phone_e164: contact.phone_e164,
-        status: "PENDING",
-        estimated_cost_brl: selectedRate
-      }));
+      const recipients = [
+        ...eligible.map((recipient) => ({
+          broadcast_id: broadcast.id,
+          contact_id:
+            recipient.contactId ??
+            contactByPhone.get(recipient.phone) ??
+            null,
+          recipient_name: recipient.name,
+          phone_e164: recipient.phone,
+          status: "PENDING",
+          variables: variablesForRecipient(recipient),
+          source_row: recipient.rowNumber,
+          raw_data: recipient.rawData,
+          estimated_cost_brl: selectedRate
+        })),
+        ...excluded.map((recipient) => ({
+          broadcast_id: broadcast.id,
+          contact_id: null,
+          recipient_name: recipient.name,
+          phone_e164:
+            recipient.phone || recipient.rawPhone || `linha-${recipient.rowNumber ?? "sem-numero"}`,
+          status: "SKIPPED",
+          variables: {},
+          source_row: recipient.rowNumber,
+          raw_data: recipient.rawData,
+          exclude_reason: recipient.reason,
+          estimated_cost_brl: 0
+        }))
+      ];
 
-      for (let index = 0; index < recipients.length; index += 500) {
-        const batch = recipients.slice(index, index + 500);
+      for (let index = 0; index < recipients.length; index += 400) {
+        const batch = recipients.slice(index, index + 400);
         const { error: recipientError } = await supabase
           .from("broadcast_recipients")
           .insert(batch);
@@ -585,13 +1130,10 @@ export default function BroadcastsClient() {
         if (recipientError) throw recipientError;
       }
 
-      setName("");
-      setTemplateId("");
-      setAudience(["LEAD"]);
-      setOptInConfirmed(false);
       setShowForm(false);
+      resetWizard();
       setMessage(
-        `Disparo preparado com ${contacts.length} destinatário(s). Nenhuma mensagem foi enviada automaticamente.`
+        `Disparo preparado: ${eligible.length} elegível(is) e ${excluded.length} excluído(s). Nenhuma mensagem foi enviada automaticamente.`
       );
 
       await loadData();
