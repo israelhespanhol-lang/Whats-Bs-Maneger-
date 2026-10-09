@@ -7,6 +7,7 @@ export type SidebarSection =
   | "conversations"
   | "contacts"
   | "campaigns"
+  | "broadcasts"
   | "templates"
   | "reports"
   | "settings";
@@ -39,6 +40,7 @@ const items: Array<{
   { id: "conversations", label: "Conversas", href: "/" },
   { id: "contacts", label: "Contatos", href: "/contacts" },
   { id: "campaigns", label: "Campanhas", href: "/campaigns" },
+  { id: "broadcasts", label: "Disparos", href: "/broadcasts" },
   { id: "templates", label: "Templates", href: "/templates" },
   { id: "reports", label: "Relatórios", href: "/reports" },
   { id: "settings", label: "Configurações", href: "/settings" }
