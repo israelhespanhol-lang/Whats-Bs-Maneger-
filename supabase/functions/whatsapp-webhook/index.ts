@@ -66,7 +66,12 @@ Deno.serve(async (req: Request) => {
     const challenge = url.searchParams.get("hub.challenge");
     const verifyToken = Deno.env.get("WHATSAPP_VERIFY_TOKEN");
 
-    if (mode === "subscribe" && verifyToken && token === verifyToken && challenge) {
+    if (
+      mode === "subscribe" &&
+      verifyToken &&
+      token === verifyToken &&
+      challenge
+    ) {
       return new Response(challenge, { status: 200 });
     }
 
@@ -87,8 +92,7 @@ Deno.serve(async (req: Request) => {
   const url = Deno.env.get("SUPABASE_URL")!;
   const legacyKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const secretKeys = Deno.env.get("SUPABASE_SECRET_KEYS");
-  const secretKey =
-    secretKeys ? JSON.parse(secretKeys)["default"] : legacyKey;
+  const secretKey = secretKeys ? JSON.parse(secretKeys)["default"] : legacyKey;
 
   if (!secretKey) {
     return json({ error: "Supabase admin key unavailable" }, 500);
@@ -100,6 +104,7 @@ Deno.serve(async (req: Request) => {
 
   let inserted = 0;
   let statusesUpdated = 0;
+  const errors: Array<{ stage: string; message: string }> = [];
 
   for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
@@ -107,13 +112,17 @@ Deno.serve(async (req: Request) => {
       const phoneNumberId = value?.metadata?.phone_number_id;
       if (!phoneNumberId) continue;
 
-      const { data: account } = await admin
+      const { data: account, error: accountError } = await admin
         .from("whatsapp_accounts")
         .select("id,organization_id")
         .eq("phone_number_id", phoneNumberId)
         .eq("status", "CONNECTED")
         .maybeSingle();
 
+      if (accountError) {
+        errors.push({ stage: "account", message: accountError.message });
+        continue;
+      }
       if (!account) continue;
 
       const names = new Map<string, string>();
@@ -148,9 +157,14 @@ Deno.serve(async (req: Request) => {
           .select("id")
           .single();
 
-        if (contactError || !contact) continue;
+        if (contactError || !contact) {
+          if (contactError) {
+            errors.push({ stage: "contact", message: contactError.message });
+          }
+          continue;
+        }
 
-        let { data: conversation } = await admin
+        let { data: conversation, error: conversationLookupError } = await admin
           .from("conversations")
           .select("id,unread_count")
           .eq("organization_id", account.organization_id)
@@ -158,60 +172,150 @@ Deno.serve(async (req: Request) => {
           .eq("contact_id", contact.id)
           .maybeSingle();
 
-        if (!conversation) {
-          const { data: createdConversation } = await admin
-            .from("conversations")
-            .insert({
-              organization_id: account.organization_id,
-              whatsapp_account_id: account.id,
-              contact_id: contact.id,
-              status: "OPEN",
-              unread_count: 0,
-              last_message_at: receivedAt,
-              customer_service_window_expires_at: new Date(
-                new Date(receivedAt).getTime() + 24 * 60 * 60 * 1000
-              ).toISOString()
-            })
-            .select("id,unread_count")
-            .single();
+        if (conversationLookupError) {
+          errors.push({
+            stage: "conversation_lookup",
+            message: conversationLookupError.message
+          });
+          continue;
+        }
 
-          conversation = createdConversation;
+        if (!conversation) {
+          const { data: createdConversation, error: createConversationError } =
+            await admin
+              .from("conversations")
+              .insert({
+                organization_id: account.organization_id,
+                whatsapp_account_id: account.id,
+                contact_id: contact.id,
+                status: "OPEN",
+                unread_count: 0,
+                last_message_at: receivedAt,
+                last_message_preview: bodyFromMessage(message) ?? `[${message.type ?? "mensagem"}]`,
+                last_message_direction: "INBOUND",
+                customer_service_window_expires_at: new Date(
+                  new Date(receivedAt).getTime() + 24 * 60 * 60 * 1000
+                ).toISOString()
+              })
+              .select("id,unread_count")
+              .single();
+
+          if (createConversationError) {
+            // Another message may have created the conversation concurrently.
+            if (createConversationError.code === "23505") {
+              const { data: concurrentConversation, error: recoveryError } =
+                await admin
+                  .from("conversations")
+                  .select("id,unread_count")
+                  .eq("organization_id", account.organization_id)
+                  .eq("whatsapp_account_id", account.id)
+                  .eq("contact_id", contact.id)
+                  .maybeSingle();
+
+              if (recoveryError || !concurrentConversation) {
+                errors.push({
+                  stage: "conversation_recovery",
+                  message:
+                    recoveryError?.message ??
+                    "Conversation conflict could not be recovered"
+                });
+                continue;
+              }
+
+              conversation = concurrentConversation;
+            } else {
+              errors.push({
+                stage: "conversation_insert",
+                message: createConversationError.message
+              });
+              continue;
+            }
+          } else {
+            conversation = createdConversation;
+          }
         }
 
         if (!conversation) continue;
 
-        const { data: createdMessage } = await admin
+        // Explicit deduplication is used here because whatsapp_message_id has a
+        // partial unique index. PostgREST upsert cannot reliably infer that
+        // partial index from onConflict.
+        const { data: existingMessage, error: dedupeError } = await admin
           .from("messages")
-          .upsert(
-            {
-              organization_id: account.organization_id,
-              conversation_id: conversation.id,
-              whatsapp_message_id: whatsappMessageId,
-              direction: "INBOUND",
-              message_type: message.type ?? "unknown",
-              body: bodyFromMessage(message),
-              status: "DELIVERED",
-              raw_payload: message,
-              created_at: receivedAt
-            },
-            { onConflict: "organization_id,whatsapp_message_id", ignoreDuplicates: true }
-          )
           .select("id")
+          .eq("organization_id", account.organization_id)
+          .eq("whatsapp_message_id", whatsappMessageId)
           .maybeSingle();
 
-        if (createdMessage) {
-          inserted += 1;
-          await admin
+        if (dedupeError) {
+          errors.push({ stage: "message_dedupe", message: dedupeError.message });
+          continue;
+        }
+
+        if (existingMessage) continue;
+
+        const { data: createdMessage, error: messageInsertError } = await admin
+          .from("messages")
+          .insert({
+            organization_id: account.organization_id,
+            conversation_id: conversation.id,
+            whatsapp_message_id: whatsappMessageId,
+            direction: "INBOUND",
+            message_type: message.type ?? "unknown",
+            body: bodyFromMessage(message),
+            status: "DELIVERED",
+            raw_payload: message,
+            created_at: receivedAt
+          })
+          .select("id")
+          .single();
+
+        if (messageInsertError || !createdMessage) {
+          if (messageInsertError) {
+            errors.push({
+              stage: "message_insert",
+              message: messageInsertError.message
+            });
+          }
+          continue;
+        }
+
+        inserted += 1;
+
+        const windowExpiresAt = new Date(
+          new Date(receivedAt).getTime() + 24 * 60 * 60 * 1000
+        ).toISOString();
+
+        const { error: conversationUpdateError } = await admin.rpc(
+          "touch_conversation_inbound",
+          {
+            p_conversation_id: conversation.id,
+            p_received_at: receivedAt,
+            p_window_expires_at: windowExpiresAt
+          }
+        );
+
+        if (conversationUpdateError) {
+          errors.push({
+            stage: "conversation_update",
+            message: conversationUpdateError.message
+          });
+        } else {
+          const { error: previewError } = await admin
             .from("conversations")
             .update({
-              status: "OPEN",
-              unread_count: (conversation.unread_count ?? 0) + 1,
-              last_message_at: receivedAt,
-              customer_service_window_expires_at: new Date(
-                new Date(receivedAt).getTime() + 24 * 60 * 60 * 1000
-              ).toISOString()
+              last_message_preview:
+                bodyFromMessage(message) ?? `[${message.type ?? "mensagem"}]`,
+              last_message_direction: "INBOUND"
             })
             .eq("id", conversation.id);
+
+          if (previewError) {
+            errors.push({
+              stage: "conversation_preview_update",
+              message: previewError.message
+            });
+          }
         }
       }
 
@@ -246,12 +350,20 @@ Deno.serve(async (req: Request) => {
           patch.error_message = err?.message ?? err?.title ?? null;
         }
 
-        const { data: changed } = await admin
+        const { data: changed, error: statusUpdateError } = await admin
           .from("messages")
           .update(patch)
           .eq("organization_id", account.organization_id)
           .eq("whatsapp_message_id", status.id)
           .select("id");
+
+        if (statusUpdateError) {
+          errors.push({
+            stage: "status_update",
+            message: statusUpdateError.message
+          });
+          continue;
+        }
 
         statusesUpdated += changed?.length ?? 0;
 
@@ -288,7 +400,15 @@ Deno.serve(async (req: Request) => {
 
           if (shouldAdvance) {
             const recipientPatch: Record<string, any> = {
-              status: mapped
+              status: mapped,
+              meta_billable:
+                typeof status?.pricing?.billable === "boolean"
+                  ? status.pricing.billable
+                  : null,
+              meta_pricing_category:
+                status?.pricing?.category ?? null,
+              meta_pricing_model:
+                status?.pricing?.pricing_model ?? null
             };
 
             if (mapped === "SENT") {
@@ -344,5 +464,10 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  return json({ received: true, inserted, statusesUpdated });
+  return json({
+    received: true,
+    inserted,
+    statusesUpdated,
+    errors: errors.length ? errors : undefined
+  });
 });
