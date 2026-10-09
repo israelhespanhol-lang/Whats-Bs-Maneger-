@@ -1297,9 +1297,9 @@ export default function BroadcastsClient() {
           </button>
           <button
             className="primaryAction"
-            onClick={() => setShowForm((current) => !current)}
+            onClick={showForm ? closeWizard : openWizard}
           >
-            {showForm ? "Fechar" : "+ Novo disparo"}
+            {showForm ? "Fechar assistente" : "+ Novo disparo"}
           </button>
         </div>
       }
@@ -1315,126 +1315,719 @@ export default function BroadcastsClient() {
       </div>
 
       {showForm && (
-        <form className="broadcastCreateCard" onSubmit={createBroadcast}>
-          <div className="broadcastFormGrid">
-            <div className="builderField">
-              <label>Nome do disparo</label>
-              <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Ex.: Reativação Israel Outubro"
-                required
-              />
-            </div>
-
-            <div className="builderField">
-              <label>Template aprovado</label>
-              <select
-                value={templateId}
-                onChange={(event) => setTemplateId(event.target.value)}
-                required
+        <form className="broadcastWizard" onSubmit={createBroadcast}>
+          <div className="broadcastWizardSteps">
+            {[
+              [1, "Identificação"],
+              [2, "Destinatários"],
+              [3, "Template"],
+              [4, "Revisão"],
+              [5, "Confirmação"]
+            ].map(([step, label]) => (
+              <button
+                key={step}
+                type="button"
+                className={wizardStep === step ? "active" : wizardStep > Number(step) ? "done" : ""}
+                onClick={() => {
+                  const target = Number(step) as 1 | 2 | 3 | 4 | 5;
+                  if (target < wizardStep) setWizardStep(target);
+                }}
               >
-                <option value="">Selecione...</option>
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name} · {categoryLabels[template.category]}
-                  </option>
-                ))}
-              </select>
-              {templates.length === 0 && (
-                <small>
-                  Nenhum template aprovado. Envie um template para aprovação primeiro.
-                </small>
-              )}
-            </div>
+                <span>{wizardStep > Number(step) ? "✓" : step}</span>
+                <strong>{label}</strong>
+              </button>
+            ))}
           </div>
 
-          <div className="builderField">
-            <label>Público</label>
-            <div className="audiencePicker">
-              {(Object.keys(audienceLabels) as ContactStatus[]).map(
-                (status) => (
-                  <button
-                    type="button"
-                    key={status}
-                    className={audience.includes(status) ? "selected" : ""}
-                    onClick={() => toggleAudience(status)}
-                  >
-                    {audienceLabels[status]}
-                  </button>
-                )
-              )}
-            </div>
-          </div>
-
-          <div className="broadcastCostPanel">
-            <div className="broadcastCostMetric">
-              <span>Destinatários</span>
-              <strong>{counting ? "…" : audienceCount}</strong>
-              <small>contatos no público atual</small>
-            </div>
-
-            <div className="broadcastRateField metaOfficialRate">
-              <label>
-                Tarifa oficial Meta
-                {selectedTemplate && (
-                  <span>{categoryLabels[selectedTemplate.category]}</span>
-                )}
-              </label>
-              <div className="metaRateValue">
-                <strong>{money(selectedRate)}</strong>
-                <span>por mensagem entregue</span>
+          {wizardStep === 1 && (
+            <section className="broadcastWizardPanel">
+              <div className="wizardPanelHeading">
+                <div>
+                  <p className="eyebrow">PASSO 1 DE 5</p>
+                  <h2>Identifique o disparo e escolha o canal</h2>
+                  <p>
+                    O nome serve apenas para localizar este lote no histórico.
+                    Nada será enviado nesta etapa.
+                  </p>
+                </div>
               </div>
-              <small>
-                Brasil · BRL · fonte oficial Meta
-                {pricingFetchedAt
-                  ? ` · atualizado ${new Intl.DateTimeFormat("pt-BR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit"
-                    }).format(new Date(pricingFetchedAt))}`
-                  : ""}
-              </small>
-            </div>
 
-            <div className="broadcastCostMetric highlighted">
-              <span>Custo estimado</span>
-              <strong>{money(estimatedCost)}</strong>
-              <small>{audienceCount} × {money(selectedRate)}</small>
-            </div>
-          </div>
+              <div className="broadcastFormGrid">
+                <div className="builderField">
+                  <label>Nome do disparo</label>
+                  <input
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Ex.: Retomada Israel Outubro"
+                    required
+                  />
+                </div>
 
-          <label className="broadcastConsent">
-            <input
-              type="checkbox"
-              checked={optInConfirmed}
-              onChange={(event) => setOptInConfirmed(event.target.checked)}
-            />
-            <span>
-              Confirmo que estes contatos autorizaram receber mensagens da Mais Viagens pelo WhatsApp.
-            </span>
-          </label>
+                <div className="builderField">
+                  <label>Canal de envio</label>
+                  <select
+                    value={channelId}
+                    onChange={(event) => setChannelId(event.target.value)}
+                    required
+                  >
+                    <option value="">Selecione...</option>
+                    {accounts.map((channel) => (
+                      <option key={channel.id} value={channel.id}>
+                        {channel.verified_name || "WhatsApp"} ·{" "}
+                        {channel.display_phone_number || "sem telefone"} ·{" "}
+                        {channel.status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
-          <div className="broadcastFormFooter">
-            <div>
-              <strong>Resumo</strong>
-              <span>
-                {audienceCount} destinatário(s) · {money(estimatedCost)} estimados
-              </span>
-            </div>
-            <button
-              className="primaryAction"
-              disabled={
-                saving ||
-                !selectedTemplate ||
-                !optInConfirmed ||
-                audienceCount === 0
-              }
-            >
-              {saving ? "Preparando..." : "Preparar disparo"}
-            </button>
-          </div>
+              <div className="wizardQualityCard">
+                <div>
+                  <strong>Verificação de qualidade</strong>
+                  <span>
+                    Confere conexão do canal e disponibilidade de templates
+                    aprovados. Não envia mensagens.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="secondaryAction"
+                  onClick={() => void verifyQuality()}
+                >
+                  Verificar qualidade
+                </button>
+              </div>
+
+              <div className="builderNavigation">
+                <span />
+                <button
+                  type="button"
+                  className="primaryAction"
+                  onClick={() => {
+                    const channel = accounts.find((item) => item.id === channelId);
+                    if (!name.trim()) {
+                      setMessage("Informe o nome do disparo.");
+                      return;
+                    }
+                    if (!channel || channel.status !== "CONNECTED") {
+                      setMessage("Selecione um canal conectado.");
+                      return;
+                    }
+                    setMessage(null);
+                    setWizardStep(2);
+                  }}
+                >
+                  Próximo →
+                </button>
+              </div>
+            </section>
+          )}
+
+          {wizardStep === 2 && (
+            <section className="broadcastWizardPanel">
+              <div className="wizardPanelHeading">
+                <div>
+                  <p className="eyebrow">PASSO 2 DE 5</p>
+                  <h2>Escolha a origem dos destinatários</h2>
+                  <p>
+                    Use contatos do CRM, uma etiqueta existente ou importe
+                    CSV/Excel. Telefones são normalizados e duplicados são
+                    removidos na revisão.
+                  </p>
+                </div>
+              </div>
+
+              <div className="broadcastSourceGrid">
+                <button
+                  type="button"
+                  className={sourceType === "CRM_STATUS" ? "selected" : ""}
+                  onClick={() => {
+                    setSourceType("CRM_STATUS");
+                    setReviewReady(false);
+                  }}
+                >
+                  <strong>CRM / status</strong>
+                  <span>Selecionar contatos por estágio cadastrado.</span>
+                </button>
+                <button
+                  type="button"
+                  className={sourceType === "TAG" ? "selected" : ""}
+                  onClick={() => {
+                    setSourceType("TAG");
+                    setReviewReady(false);
+                  }}
+                >
+                  <strong>Etiqueta</strong>
+                  <span>Usar contatos que possuem uma etiqueta específica.</span>
+                </button>
+                <button
+                  type="button"
+                  className={sourceType === "FILE" ? "selected" : ""}
+                  onClick={() => {
+                    setSourceType("FILE");
+                    setReviewReady(false);
+                  }}
+                >
+                  <strong>Planilha</strong>
+                  <span>Importar .csv, .xlsx ou .xls.</span>
+                </button>
+              </div>
+
+              {sourceType === "CRM_STATUS" && (
+                <div className="wizardSourcePanel">
+                  <label>Estados do CRM</label>
+                  <div className="audiencePicker">
+                    {(Object.keys(audienceLabels) as ContactStatus[]).map(
+                      (status) => (
+                        <button
+                          type="button"
+                          key={status}
+                          className={audience.includes(status) ? "selected" : ""}
+                          onClick={() => toggleAudience(status)}
+                        >
+                          {audienceLabels[status]}
+                        </button>
+                      )
+                    )}
+                  </div>
+                  <small>
+                    {counting ? "Contando..." : `${audienceCount} contato(s) encontrados.`}
+                  </small>
+                </div>
+              )}
+
+              {sourceType === "TAG" && (
+                <div className="wizardSourcePanel">
+                  <label>Etiqueta</label>
+                  <select
+                    value={selectedTagId}
+                    onChange={(event) => setSelectedTagId(event.target.value)}
+                  >
+                    <option value="">Selecione...</option>
+                    {tags.map((tag) => (
+                      <option key={tag.id} value={tag.id}>
+                        {tag.name}
+                      </option>
+                    ))}
+                  </select>
+                  <small>
+                    {selectedTagId
+                      ? counting
+                        ? "Contando..."
+                        : `${audienceCount} contato(s) com esta etiqueta.`
+                      : "Escolha uma etiqueta para contar os destinatários."}
+                  </small>
+                </div>
+              )}
+
+              {sourceType === "FILE" && (
+                <div className="wizardSourcePanel fileImportPanel">
+                  <label className="fileDrop">
+                    <input
+                      type="file"
+                      accept=".csv,.xlsx,.xls"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void handleRecipientFile(file);
+                      }}
+                    />
+                    <strong>{fileName || "Selecionar CSV ou Excel"}</strong>
+                    <span>.csv, .xlsx ou .xls · até 8 MB</span>
+                  </label>
+
+                  <label className="headerCheckbox">
+                    <input
+                      type="checkbox"
+                      checked={firstRowHeader}
+                      onChange={(event) =>
+                        setFirstRowHeader(event.target.checked)
+                      }
+                    />
+                    <span>A primeira linha é o cabeçalho</span>
+                  </label>
+
+                  {fileHeaders.length > 0 && (
+                    <>
+                      <div className="broadcastFormGrid">
+                        <div className="builderField">
+                          <label>Coluna de telefone / WhatsApp</label>
+                          <select
+                            value={phoneColumn}
+                            onChange={(event) => setPhoneColumn(event.target.value)}
+                          >
+                            {fileHeaders.map((header) => (
+                              <option key={header} value={header}>
+                                {header}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="builderField">
+                          <label>Coluna de nome (opcional)</label>
+                          <select
+                            value={nameColumn}
+                            onChange={(event) => setNameColumn(event.target.value)}
+                          >
+                            <option value="">Sem coluna de nome</option>
+                            {fileHeaders.map((header) => (
+                              <option key={header} value={header}>
+                                {header}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="importPreview">
+                        <div>
+                          <strong>Prévia da planilha</strong>
+                          <span>{importedRows.length} linha(s)</span>
+                        </div>
+                        <div className="importPreviewTable">
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>#</th>
+                                {fileHeaders.slice(0, 5).map((header) => (
+                                  <th key={header}>{header}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {importedRows.slice(0, 5).map((row) => (
+                                <tr key={row.rowNumber}>
+                                  <td>{row.rowNumber}</td>
+                                  {fileHeaders.slice(0, 5).map((header) => (
+                                    <td key={header}>{row.values[header]}</td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              <div className="builderNavigation">
+                <button
+                  type="button"
+                  className="secondaryAction"
+                  onClick={() => setWizardStep(1)}
+                >
+                  ← Voltar
+                </button>
+                <button
+                  type="button"
+                  className="primaryAction"
+                  onClick={() => {
+                    if (sourceType === "FILE" && (!fileName || !phoneColumn)) {
+                      setMessage("Carregue a planilha e selecione a coluna de telefone.");
+                      return;
+                    }
+                    if (sourceType === "TAG" && !selectedTagId) {
+                      setMessage("Selecione uma etiqueta.");
+                      return;
+                    }
+                    if (audienceCount <= 0) {
+                      setMessage("A origem selecionada não possui destinatários.");
+                      return;
+                    }
+                    setMessage(null);
+                    setWizardStep(3);
+                  }}
+                >
+                  Próximo →
+                </button>
+              </div>
+            </section>
+          )}
+
+          {wizardStep === 3 && (
+            <section className="broadcastWizardPanel">
+              <div className="wizardPanelHeading">
+                <div>
+                  <p className="eyebrow">PASSO 3 DE 5</p>
+                  <h2>Selecione o template e mapeie as variáveis</h2>
+                  <p>
+                    Somente templates aprovados pela Meta aparecem aqui.
+                  </p>
+                </div>
+              </div>
+
+              <div className="builderField">
+                <label>Template aprovado</label>
+                <select
+                  value={templateId}
+                  onChange={(event) => setTemplateId(event.target.value)}
+                  required
+                >
+                  <option value="">Selecione...</option>
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name} · {categoryLabels[template.category]}
+                    </option>
+                  ))}
+                </select>
+                {templates.length === 0 && (
+                  <small>
+                    Nenhum template aprovado. Sincronize ou envie um template
+                    para aprovação primeiro.
+                  </small>
+                )}
+              </div>
+
+              {selectedTemplate && (
+                <div className="wizardTemplatePreview">
+                  <span>{categoryLabels[selectedTemplate.category]}</span>
+                  {selectedTemplate.header_text && (
+                    <strong>{selectedTemplate.header_text}</strong>
+                  )}
+                  <p>{selectedTemplate.body}</p>
+                </div>
+              )}
+
+              {(headerVariables.length > 0 || bodyVariables.length > 0) && (
+                <div className="variableMappingCard">
+                  <div>
+                    <strong>Mapeamento das variáveis</strong>
+                    <span>
+                      Defina de onde vem o valor de cada variável por destinatário.
+                    </span>
+                  </div>
+
+                  {[
+                    ...headerVariables.map((number) => ({
+                      key: `header:${number}`,
+                      label: `Cabeçalho {{${number}}}`
+                    })),
+                    ...bodyVariables.map((number) => ({
+                      key: `body:${number}`,
+                      label: `Corpo {{${number}}}`
+                    }))
+                  ].map((variable) => {
+                    const mapping =
+                      variableMappings[variable.key] ?? {
+                        source: "FIXED" as const,
+                        value: ""
+                      };
+
+                    return (
+                      <div className="variableMappingRow" key={variable.key}>
+                        <strong>{variable.label}</strong>
+                        <select
+                          value={mapping.source}
+                          onChange={(event) => {
+                            const source = event.target.value as VariableMapping["source"];
+                            setVariableMappings((current) => ({
+                              ...current,
+                              [variable.key]: {
+                                source,
+                                value:
+                                  source === "COLUMN"
+                                    ? fileHeaders[0] ?? ""
+                                    : source === "FIXED"
+                                      ? current[variable.key]?.value ?? ""
+                                      : ""
+                              }
+                            }));
+                          }}
+                        >
+                          <option value="CONTACT_NAME">Nome do contato</option>
+                          <option value="CONTACT_PHONE">Telefone</option>
+                          {sourceType === "FILE" && (
+                            <option value="COLUMN">Coluna da planilha</option>
+                          )}
+                          <option value="FIXED">Valor fixo</option>
+                        </select>
+
+                        {mapping.source === "COLUMN" && (
+                          <select
+                            value={mapping.value}
+                            onChange={(event) =>
+                              setVariableMappings((current) => ({
+                                ...current,
+                                [variable.key]: {
+                                  source: "COLUMN",
+                                  value: event.target.value
+                                }
+                              }))
+                            }
+                          >
+                            {fileHeaders.map((header) => (
+                              <option key={header} value={header}>
+                                {header}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+
+                        {mapping.source === "FIXED" && (
+                          <input
+                            value={mapping.value}
+                            onChange={(event) =>
+                              setVariableMappings((current) => ({
+                                ...current,
+                                [variable.key]: {
+                                  source: "FIXED",
+                                  value: event.target.value
+                                }
+                              }))
+                            }
+                            placeholder="Valor para todos os destinatários"
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="builderNavigation">
+                <button
+                  type="button"
+                  className="secondaryAction"
+                  onClick={() => setWizardStep(2)}
+                >
+                  ← Voltar
+                </button>
+                <button
+                  type="button"
+                  className="primaryAction"
+                  onClick={() =>
+                    void (async () => {
+                      if (!selectedTemplate) {
+                        setMessage("Selecione um template aprovado.");
+                        return;
+                      }
+                      const ok = await buildReview();
+                      if (ok) setWizardStep(4);
+                    })()
+                  }
+                >
+                  Validar destinatários →
+                </button>
+              </div>
+            </section>
+          )}
+
+          {wizardStep === 4 && (
+            <section className="broadcastWizardPanel">
+              <div className="wizardPanelHeading">
+                <div>
+                  <p className="eyebrow">PASSO 4 DE 5</p>
+                  <h2>Revisão, validações e custo estimado</h2>
+                  <p>
+                    Confira os elegíveis e excluídos antes de preparar o lote.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="secondaryAction"
+                  onClick={() => void buildReview()}
+                >
+                  ↻ Revalidar
+                </button>
+              </div>
+
+              <div className="broadcastReviewMetrics">
+                <article>
+                  <span>Elegíveis</span>
+                  <strong>
+                    {reviewRecipients.filter((item) => item.eligible).length}
+                  </strong>
+                </article>
+                <article>
+                  <span>Excluídos</span>
+                  <strong>
+                    {reviewRecipients.filter((item) => !item.eligible).length}
+                  </strong>
+                </article>
+                <article>
+                  <span>Tarifa oficial</span>
+                  <strong>{money(selectedRate)}</strong>
+                </article>
+                <article className="highlighted">
+                  <span>Estimativa máxima</span>
+                  <strong>{money(estimatedCost)}</strong>
+                </article>
+              </div>
+
+              <div className="recipientReviewTable">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Status</th>
+                      <th>Nome</th>
+                      <th>Telefone</th>
+                      <th>Linha</th>
+                      <th>Motivo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reviewRecipients.slice(0, 30).map((recipient) => (
+                      <tr key={recipient.key}>
+                        <td>
+                          <span
+                            className={
+                              recipient.eligible
+                                ? "recipientStatus eligible"
+                                : "recipientStatus excluded"
+                            }
+                          >
+                            {recipient.eligible ? "Elegível" : "Excluído"}
+                          </span>
+                        </td>
+                        <td>{recipient.name || "—"}</td>
+                        <td>{recipient.phone || recipient.rawPhone || "—"}</td>
+                        <td>{recipient.rowNumber ?? "CRM"}</td>
+                        <td>{recipient.reason || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {reviewRecipients.length > 30 && (
+                  <small>
+                    Mostrando 30 de {reviewRecipients.length} registros.
+                  </small>
+                )}
+              </div>
+
+              <div className="wizardCostNotice">
+                <strong>Estimativa ≠ cobrança efetiva</strong>
+                <p>
+                  O valor acima usa a tarifa oficial sincronizada da Meta. O
+                  histórico mantém separado qualquer dado de faturamento
+                  informado pelo webhook.
+                </p>
+              </div>
+
+              <div className="builderNavigation">
+                <button
+                  type="button"
+                  className="secondaryAction"
+                  onClick={() => setWizardStep(3)}
+                >
+                  ← Voltar
+                </button>
+                <button
+                  type="button"
+                  className="primaryAction"
+                  disabled={
+                    !reviewReady ||
+                    reviewRecipients.filter((item) => item.eligible).length === 0
+                  }
+                  onClick={() => setWizardStep(5)}
+                >
+                  Próximo →
+                </button>
+              </div>
+            </section>
+          )}
+
+          {wizardStep === 5 && (
+            <section className="broadcastWizardPanel">
+              <div className="wizardPanelHeading">
+                <div>
+                  <p className="eyebrow">PASSO 5 DE 5</p>
+                  <h2>Confirmação e preparação</h2>
+                  <p>
+                    Esta etapa salva o lote como pronto. O envio real continua
+                    exigindo o botão “Iniciar envio” no histórico.
+                  </p>
+                </div>
+              </div>
+
+              <div className="finalReviewCard">
+                <div>
+                  <span>Disparo</span>
+                  <strong>{name}</strong>
+                </div>
+                <div>
+                  <span>Canal</span>
+                  <strong>
+                    {accounts.find((item) => item.id === channelId)?.verified_name ||
+                      accounts.find((item) => item.id === channelId)?.display_phone_number ||
+                      "—"}
+                  </strong>
+                </div>
+                <div>
+                  <span>Template</span>
+                  <strong>{selectedTemplate?.name || "—"}</strong>
+                </div>
+                <div>
+                  <span>Elegíveis</span>
+                  <strong>
+                    {reviewRecipients.filter((item) => item.eligible).length}
+                  </strong>
+                </div>
+                <div>
+                  <span>Excluídos</span>
+                  <strong>
+                    {reviewRecipients.filter((item) => !item.eligible).length}
+                  </strong>
+                </div>
+                <div>
+                  <span>Custo estimado</span>
+                  <strong>{money(estimatedCost)}</strong>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="scheduledUnavailable"
+                disabled
+                title="O backend ainda não possui um scheduler de disparos. O recurso só será habilitado quando houver execução agendada segura."
+              >
+                ◷ Agendamento — em breve
+              </button>
+
+              <label className="broadcastConsent">
+                <input
+                  type="checkbox"
+                  checked={optInConfirmed}
+                  onChange={(event) => setOptInConfirmed(event.target.checked)}
+                />
+                <span>
+                  Confirmo que estes destinatários autorizaram receber mensagens
+                  da Mais Viagens pelo WhatsApp.
+                </span>
+              </label>
+
+              <div className="wizardNoSendNotice">
+                <strong>Nenhum envio será feito agora.</strong>
+                <span>
+                  “Preparar disparo” apenas cria o lote e os destinatários. Para
+                  enviar, será necessário voltar ao histórico, clicar em “Iniciar
+                  envio” e confirmar novamente.
+                </span>
+              </div>
+
+              <div className="builderNavigation">
+                <button
+                  type="button"
+                  className="secondaryAction"
+                  onClick={() => setWizardStep(4)}
+                >
+                  ← Voltar
+                </button>
+                <button
+                  className="primaryAction"
+                  disabled={
+                    saving ||
+                    !optInConfirmed ||
+                    !reviewReady ||
+                    audienceCount === 0
+                  }
+                >
+                  {saving ? "Preparando..." : "Preparar disparo"}
+                </button>
+              </div>
+            </section>
+          )}
         </form>
       )}
 
