@@ -7,6 +7,7 @@ import AppSidebar from "./app-sidebar";
 import { supabase } from "../lib/supabase";
 
 type Membership = {
+  id: string;
   organization_id: string;
   role: "OWNER" | "ADMIN" | "AGENT";
   organizations: { name: string; slug: string } | { name: string; slug: string }[] | null;
@@ -21,6 +22,7 @@ type Contact = {
 
 type Conversation = {
   id: string;
+  assigned_member_id: string | null;
   status: string;
   unread_count: number;
   last_message_at: string | null;
@@ -40,6 +42,8 @@ type Message = {
   read_at: string | null;
   optimistic?: boolean;
 };
+
+type ConversationFilter = "ALL" | "UNREAD" | "MINE";
 
 type WhatsAppAccount = {
   id: string;
@@ -149,6 +153,14 @@ export default function DashboardClient() {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [conversationSearch, setConversationSearch] = useState("");
+  const [conversationFilter, setConversationFilter] =
+    useState<ConversationFilter>("ALL");
+  const [messageSearchOpen, setMessageSearchOpen] = useState(false);
+  const [messageSearch, setMessageSearch] = useState("");
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -159,11 +171,41 @@ export default function DashboardClient() {
     [conversations, selectedId]
   );
 
+  const visibleConversations = useMemo(() => {
+    const term = conversationSearch.trim().toLowerCase();
+
+    return conversations.filter((item) => {
+      const itemContact = one(item.contacts);
+      const label = `${itemContact?.name ?? ""} ${itemContact?.phone_e164 ?? ""}`
+        .toLowerCase();
+
+      if (term && !label.includes(term)) return false;
+      if (conversationFilter === "UNREAD" && item.unread_count <= 0) return false;
+      if (
+        conversationFilter === "MINE" &&
+        item.assigned_member_id !== membership?.id
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [conversations, conversationSearch, conversationFilter, membership?.id]);
+
+  const displayedMessages = useMemo(() => {
+    const term = messageSearch.trim().toLowerCase();
+    if (!messageSearchOpen || !term) return messages;
+
+    return messages.filter((message) =>
+      (message.body ?? message.message_type).toLowerCase().includes(term)
+    );
+  }, [messages, messageSearch, messageSearchOpen]);
+
   const loadConversations = useCallback(async (organizationId: string) => {
     const { data: rows, error: conversationError } = await supabase
       .from("conversations")
       .select(
-        "id,status,unread_count,last_message_at,customer_service_window_expires_at,contacts(id,name,phone_e164,status)"
+        "id,assigned_member_id,status,unread_count,last_message_at,customer_service_window_expires_at,contacts(id,name,phone_e164,status)"
       )
       .eq("organization_id", organizationId)
       .order("last_message_at", { ascending: false, nullsFirst: false })
@@ -236,7 +278,7 @@ export default function DashboardClient() {
 
       const { data: member, error: memberError } = await supabase
         .from("organization_members")
-        .select("organization_id, role, organizations(name,slug)")
+        .select("id, organization_id, role, organizations(name,slug)")
         .eq("user_id", session.user.id)
         .limit(1)
         .maybeSingle();
@@ -330,6 +372,8 @@ export default function DashboardClient() {
 
             next[index] = {
               ...next[index],
+              assigned_member_id:
+                changed.assigned_member_id ?? next[index].assigned_member_id,
               status: changed.status ?? next[index].status,
               unread_count: isOpen
                 ? 0
@@ -491,6 +535,178 @@ export default function DashboardClient() {
     setSending(false);
   }
 
+  async function updateAssignment(assignToMe: boolean) {
+    if (!selected || !membership) return;
+
+    const nextAssignedMemberId = assignToMe ? membership.id : null;
+    setActionsOpen(false);
+
+    setConversations((current) =>
+      current.map((item) =>
+        item.id === selected.id
+          ? { ...item, assigned_member_id: nextAssignedMemberId }
+          : item
+      )
+    );
+
+    const { error: assignmentError } = await supabase
+      .from("conversations")
+      .update({ assigned_member_id: nextAssignedMemberId })
+      .eq("id", selected.id);
+
+    if (assignmentError) {
+      setError(assignmentError.message);
+      await loadConversations(membership.organization_id);
+    }
+  }
+
+  async function toggleConversationClosed() {
+    if (!selected || !membership) return;
+
+    const nextStatus = selected.status === "CLOSED" ? "OPEN" : "CLOSED";
+    setActionsOpen(false);
+
+    setConversations((current) =>
+      current.map((item) =>
+        item.id === selected.id ? { ...item, status: nextStatus } : item
+      )
+    );
+
+    const { error: statusError } = await supabase
+      .from("conversations")
+      .update({ status: nextStatus })
+      .eq("id", selected.id);
+
+    if (statusError) {
+      setError(statusError.message);
+      await loadConversations(membership.organization_id);
+    }
+  }
+
+  async function updateContactStatus(contactId: string, status: string) {
+    setConversations((current) =>
+      current.map((item) => {
+        const currentContact = one(item.contacts);
+        if (currentContact?.id !== contactId) return item;
+
+        const nextContact = { ...currentContact, status };
+        return { ...item, contacts: nextContact };
+      })
+    );
+
+    const { error: contactError } = await supabase
+      .from("contacts")
+      .update({ status })
+      .eq("id", contactId);
+
+    if (contactError) {
+      setError(contactError.message);
+      if (membership) await loadConversations(membership.organization_id);
+    }
+  }
+
+  async function sendAttachment(file: File) {
+    if (!selected || !connected || uploading || sending) return;
+
+    const windowState = windowRemaining(
+      selected.customer_service_window_expires_at
+    );
+    if (windowState === "Janela encerrada") {
+      setError("A janela de atendimento está encerrada. Use um template aprovado.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("O anexo deve ter no máximo 5 MB.");
+      return;
+    }
+
+    const isImage = file.type.startsWith("image/");
+    const isPdf = file.type === "application/pdf";
+    if (!isImage && !isPdf) {
+      setError("Por enquanto, envie imagens ou arquivos PDF.");
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result ?? ""));
+        reader.onerror = () => reject(new Error("Falha ao ler o arquivo."));
+        reader.readAsDataURL(file);
+      });
+
+      const dataBase64 = dataUrl.split(",")[1];
+      if (!dataBase64) throw new Error("Arquivo inválido.");
+
+      const caption = draft.trim();
+      const optimisticId = `optimistic-${crypto.randomUUID()}`;
+      const optimisticMessage: Message = {
+        id: optimisticId,
+        direction: "OUTBOUND",
+        message_type: isImage ? "image" : "document",
+        body: caption || `📎 ${file.name}`,
+        status: "PENDING",
+        created_at: new Date().toISOString(),
+        sent_at: null,
+        delivered_at: null,
+        read_at: null,
+        optimistic: true
+      };
+
+      shouldAutoScrollRef.current = true;
+      setDraft("");
+      setMessages((current) => upsertMessage(current, optimisticMessage));
+
+      const { data, error: sendError } = await supabase.functions.invoke(
+        "whatsapp-send",
+        {
+          body: {
+            conversationId: selected.id,
+            attachment: {
+              kind: isImage ? "image" : "document",
+              name: file.name,
+              mimeType: file.type,
+              dataBase64,
+              caption: caption || undefined
+            }
+          }
+        }
+      );
+
+      if (sendError || !data?.message) {
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === optimisticId
+              ? { ...message, status: "FAILED", optimistic: false }
+              : message
+          )
+        );
+        throw new Error("Não foi possível enviar o anexo.");
+      }
+
+      const persisted = data.message as Message;
+      setMessages((current) =>
+        upsertMessage(
+          current.filter((message) => message.id !== optimisticId),
+          persisted
+        )
+      );
+    } catch (attachmentError) {
+      setError(
+        attachmentError instanceof Error
+          ? attachmentError.message
+          : "Não foi possível enviar o anexo."
+      );
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   async function signOut() {
     await supabase.auth.signOut();
     router.replace("/login");
@@ -553,24 +769,46 @@ export default function DashboardClient() {
 
         <label className="search">
           <span>⌕</span>
-          <input placeholder="Buscar conversa..." />
+          <input
+            value={conversationSearch}
+            onChange={(event) => setConversationSearch(event.target.value)}
+            placeholder="Buscar conversa..."
+          />
         </label>
 
         <div className="filters">
-          <button className="filter active">Todas</button>
-          <button className="filter">Não lidas</button>
-          <button className="filter">Minhas</button>
+          <button
+            type="button"
+            className={`filter ${conversationFilter === "ALL" ? "active" : ""}`}
+            onClick={() => setConversationFilter("ALL")}
+          >
+            Todas
+          </button>
+          <button
+            type="button"
+            className={`filter ${conversationFilter === "UNREAD" ? "active" : ""}`}
+            onClick={() => setConversationFilter("UNREAD")}
+          >
+            Não lidas
+          </button>
+          <button
+            type="button"
+            className={`filter ${conversationFilter === "MINE" ? "active" : ""}`}
+            onClick={() => setConversationFilter("MINE")}
+          >
+            Minhas
+          </button>
         </div>
 
         <div className="conversationItems">
-          {conversations.length === 0 ? (
+          {visibleConversations.length === 0 ? (
             <div className="emptyList">
               <div className="emptyIcon">◎</div>
-              <strong>Nenhuma conversa ainda</strong>
-              <p>Quando o WhatsApp for conectado, as conversas aparecerão aqui em tempo real.</p>
+              <strong>Nenhuma conversa neste filtro</strong>
+              <p>Altere a busca ou os filtros para visualizar outras conversas.</p>
             </div>
           ) : (
-            conversations.map((item) => {
+            visibleConversations.map((item) => {
               const itemContact = one(item.contacts);
               const label =
                 itemContact?.name ||
@@ -622,10 +860,88 @@ export default function DashboardClient() {
                 </div>
               </div>
               <div className="chatActions">
-                <button title="Buscar">⌕</button>
-                <button title="Mais opções">⋯</button>
+                <button
+                  type="button"
+                  title="Buscar mensagens"
+                  className={messageSearchOpen ? "active" : ""}
+                  onClick={() => {
+                    setMessageSearchOpen((current) => !current);
+                    setActionsOpen(false);
+                    if (messageSearchOpen) setMessageSearch("");
+                  }}
+                >
+                  ⌕
+                </button>
+                <div className="chatMenuWrap">
+                  <button
+                    type="button"
+                    title="Mais opções"
+                    className={actionsOpen ? "active" : ""}
+                    onClick={() => {
+                      setActionsOpen((current) => !current);
+                      setMessageSearchOpen(false);
+                      setMessageSearch("");
+                    }}
+                  >
+                    ⋯
+                  </button>
+                  {actionsOpen && (
+                    <div className="chatActionMenu">
+                      {selected.assigned_member_id === membership.id ? (
+                        <button
+                          type="button"
+                          onClick={() => void updateAssignment(false)}
+                        >
+                          Liberar conversa
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void updateAssignment(true)}
+                        >
+                          Assumir conversa
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void toggleConversationClosed()}
+                      >
+                        {selected.status === "CLOSED"
+                          ? "Reabrir conversa"
+                          : "Fechar conversa"}
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </header>
+
+            {messageSearchOpen && (
+              <div className="messageSearchBar">
+                <span>⌕</span>
+                <input
+                  autoFocus
+                  value={messageSearch}
+                  onChange={(event) => setMessageSearch(event.target.value)}
+                  placeholder="Buscar nesta conversa..."
+                />
+                <span className="messageSearchCount">
+                  {messageSearch.trim()
+                    ? `${displayedMessages.length} resultado${displayedMessages.length === 1 ? "" : "s"}`
+                    : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMessageSearchOpen(false);
+                    setMessageSearch("");
+                  }}
+                  aria-label="Fechar busca"
+                >
+                  ×
+                </button>
+              </div>
+            )}
 
             <div
               className="messages"
@@ -641,18 +957,26 @@ export default function DashboardClient() {
             >
               {messagesLoading && messages.length === 0 ? (
                 <div className="messageState">Carregando mensagens...</div>
-              ) : messages.length === 0 ? (
+              ) : displayedMessages.length === 0 ? (
                 <div className="emptyMessages">
                   <div className="emptyIcon">◌</div>
-                  <strong>Conversa sem mensagens</strong>
-                  <p>As mensagens recebidas pelo webhook aparecerão aqui automaticamente.</p>
+                  <strong>
+                    {messageSearch.trim()
+                      ? "Nenhuma mensagem encontrada"
+                      : "Conversa sem mensagens"}
+                  </strong>
+                  <p>
+                    {messageSearch.trim()
+                      ? "Tente outro termo de busca."
+                      : "As mensagens recebidas pelo webhook aparecerão aqui automaticamente."}
+                  </p>
                 </div>
               ) : (
                 <>
                   <div className="dayDivider">
-                    <span>{dateLabel(messages[0].created_at)}</span>
+                    <span>{dateLabel(displayedMessages[0].created_at)}</span>
                   </div>
-                  {messages.map((message) => (
+                  {displayedMessages.map((message) => (
                     <div
                       key={message.id}
                       className={`bubble ${message.direction === "INBOUND" ? "incoming" : "outgoing"}`}
@@ -682,7 +1006,29 @@ export default function DashboardClient() {
             </div>
 
             <footer className={`composer ${connected ? "" : "composerLocked"}`}>
-              <button disabled={!connected || sending}>＋</button>
+              <input
+                ref={fileInputRef}
+                className="attachmentInput"
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void sendAttachment(file);
+                }}
+              />
+              <button
+                type="button"
+                title="Enviar imagem ou PDF"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={
+                  !connected ||
+                  sending ||
+                  uploading ||
+                  windowText === "Janela encerrada"
+                }
+              >
+                {uploading ? "…" : "＋"}
+              </button>
               <input
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
@@ -699,7 +1045,12 @@ export default function DashboardClient() {
                       ? "Janela encerrada — use um template aprovado"
                       : "Digite uma mensagem..."
                 }
-                disabled={!connected || sending || windowText === "Janela encerrada"}
+                disabled={
+                  !connected ||
+                  sending ||
+                  uploading ||
+                  windowText === "Janela encerrada"
+                }
               />
               <button
                 className="send"
@@ -707,6 +1058,7 @@ export default function DashboardClient() {
                 disabled={
                   !connected ||
                   sending ||
+                  uploading ||
                   !draft.trim() ||
                   windowText === "Janela encerrada"
                 }
@@ -739,7 +1091,20 @@ export default function DashboardClient() {
 
             <div className="infoBlock">
               <span className="sectionLabel">STATUS</span>
-              <button className="statusPill">{contact.status}</button>
+              <select
+                className="statusPill statusSelectPill"
+                value={contact.status}
+                onChange={(event) =>
+                  void updateContactStatus(contact.id, event.target.value)
+                }
+                aria-label="Status do contato"
+              >
+                <option value="LEAD">Lead</option>
+                <option value="INTERESTED">Interessado</option>
+                <option value="NEGOTIATION">Negociação</option>
+                <option value="CUSTOMER">Cliente</option>
+                <option value="NOT_INTERESTED">Sem interesse</option>
+              </select>
             </div>
 
             <div className="infoBlock">
