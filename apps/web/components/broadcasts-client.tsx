@@ -330,6 +330,7 @@ export default function BroadcastsClient() {
         .eq("organization_id", organizationId)
         .eq("status", "APPROVED")
         .in("category", ["MARKETING", "UTILITY", "AUTHENTICATION"])
+        .neq("name", "hello_world")
         .order("name"),
       supabase
         .from("whatsapp_pricing_rates")
