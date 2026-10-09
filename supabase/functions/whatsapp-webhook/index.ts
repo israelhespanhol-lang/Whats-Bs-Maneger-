@@ -254,6 +254,92 @@ Deno.serve(async (req: Request) => {
           .select("id");
 
         statusesUpdated += changed?.length ?? 0;
+
+        const { data: broadcastRecipient, error: broadcastLookupError } =
+          await admin
+            .from("broadcast_recipients")
+            .select("id,broadcast_id,status")
+            .eq("whatsapp_message_id", status.id)
+            .maybeSingle();
+
+        if (broadcastLookupError) {
+          errors.push({
+            stage: "broadcast_status_lookup",
+            message: broadcastLookupError.message
+          });
+          continue;
+        }
+
+        if (broadcastRecipient) {
+          const rank: Record<string, number> = {
+            PENDING: 0,
+            PROCESSING: 0,
+            SENT: 1,
+            DELIVERED: 2,
+            READ: 3,
+            FAILED: 4,
+            SKIPPED: 4
+          };
+
+          const shouldAdvance =
+            mapped === "FAILED" ||
+            (rank[mapped] ?? 0) >=
+              (rank[broadcastRecipient.status] ?? 0);
+
+          if (shouldAdvance) {
+            const recipientPatch: Record<string, any> = {
+              status: mapped
+            };
+
+            if (mapped === "SENT") {
+              recipientPatch.sent_at = at;
+            }
+
+            if (mapped === "DELIVERED") {
+              recipientPatch.delivered_at = at;
+            }
+
+            if (mapped === "READ") {
+              recipientPatch.read_at = at;
+              recipientPatch.delivered_at = at;
+            }
+
+            if (mapped === "FAILED") {
+              const err = status.errors?.[0];
+              recipientPatch.error_code = err?.code
+                ? String(err.code)
+                : null;
+              recipientPatch.error_message =
+                err?.message ?? err?.title ?? null;
+            }
+
+            const { error: recipientUpdateError } = await admin
+              .from("broadcast_recipients")
+              .update(recipientPatch)
+              .eq("id", broadcastRecipient.id);
+
+            if (recipientUpdateError) {
+              errors.push({
+                stage: "broadcast_status_update",
+                message: recipientUpdateError.message
+              });
+            } else {
+              const { error: counterError } = await admin.rpc(
+                "refresh_broadcast_counters",
+                {
+                  p_broadcast_id: broadcastRecipient.broadcast_id
+                }
+              );
+
+              if (counterError) {
+                errors.push({
+                  stage: "broadcast_counter_refresh",
+                  message: counterError.message
+                });
+              }
+            }
+          }
+        }
       }
     }
   }
