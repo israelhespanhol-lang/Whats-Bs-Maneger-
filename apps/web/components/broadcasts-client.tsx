@@ -60,8 +60,14 @@ type Broadcast = {
   started_at: string | null;
   completed_at: string | null;
   whatsapp_account_id: string | null;
+  campaign_id: string | null;
   source_type: string;
   excluded_count: number;
+  campaigns: { name: string } | { name: string }[] | null;
+  whatsapp_accounts:
+    | { verified_name: string | null; display_phone_number: string | null }
+    | { verified_name: string | null; display_phone_number: string | null }[]
+    | null;
   sent_count: number;
   delivered_count: number;
   read_count: number;
@@ -84,6 +90,25 @@ type Account = {
   verified_name: string | null;
   display_phone_number: string | null;
   status: string;
+};
+
+type CampaignOption = {
+  id: string;
+  name: string;
+};
+
+type BroadcastRecipientDetail = {
+  id: string;
+  contact_id: string | null;
+  recipient_name: string | null;
+  phone_e164: string;
+  status: string;
+  error_code: string | null;
+  error_message: string | null;
+  exclude_reason: string | null;
+  sent_at: string | null;
+  delivered_at: string | null;
+  read_at: string | null;
 };
 
 type Tag = {
@@ -191,6 +216,7 @@ export default function BroadcastsClient() {
     useState<Record<string, RecipientMetaStats>>({});
   const [templates, setTemplates] = useState<Template[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [rates, setRates] = useState<Record<TemplateCategory, number>>({
     MARKETING: 0,
@@ -202,6 +228,7 @@ export default function BroadcastsClient() {
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [name, setName] = useState("");
   const [channelId, setChannelId] = useState("");
+  const [campaignId, setCampaignId] = useState("");
   const [sourceType, setSourceType] = useState<SourceType>("CRM_STATUS");
   const [templateId, setTemplateId] = useState("");
   const [audience, setAudience] = useState<ContactStatus[]>(["LEAD"]);
@@ -224,6 +251,12 @@ export default function BroadcastsClient() {
   const [optInConfirmed, setOptInConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sendingBroadcastId, setSendingBroadcastId] = useState<string | null>(null);
+  const [expandedBroadcastId, setExpandedBroadcastId] = useState<string | null>(null);
+  const [detailsLoadingId, setDetailsLoadingId] = useState<string | null>(null);
+  const [detailsByBroadcast, setDetailsByBroadcast] =
+    useState<Record<string, BroadcastRecipientDetail[]>>({});
+  const [responseRates, setResponseRates] =
+    useState<Record<string, { responses: number; base: number; rate: number }>>({});
   const [message, setMessage] = useState<string | null>(null);
 
   async function syncPricing(force = false) {
@@ -281,12 +314,13 @@ export default function BroadcastsClient() {
       templateResult,
       rateResult,
       accountResult,
+      campaignResult,
       tagResult
     ] = await Promise.all([
       supabase
         .from("broadcasts")
         .select(
-          "id,name,template_id,category,audience_status,audience_count,status,unit_cost_brl,estimated_cost_brl,actual_cost_brl,started_at,completed_at,whatsapp_account_id,source_type,excluded_count,sent_count,delivered_count,read_count,failed_count,created_at,message_templates(name)"
+          "id,name,template_id,category,audience_status,audience_count,status,unit_cost_brl,estimated_cost_brl,actual_cost_brl,started_at,completed_at,whatsapp_account_id,campaign_id,source_type,excluded_count,sent_count,delivered_count,read_count,failed_count,created_at,message_templates(name),campaigns(name),whatsapp_accounts(verified_name,display_phone_number)"
         )
         .eq("organization_id", organizationId)
         .order("created_at", { ascending: false }),
@@ -307,6 +341,12 @@ export default function BroadcastsClient() {
         .eq("organization_id", organizationId)
         .order("created_at"),
       supabase
+        .from("campaigns")
+        .select("id,name")
+        .eq("organization_id", organizationId)
+        .neq("status", "ARCHIVED")
+        .order("created_at", { ascending: false }),
+      supabase
         .from("tags")
         .select("id,name,color")
         .eq("organization_id", organizationId)
@@ -318,6 +358,7 @@ export default function BroadcastsClient() {
       templateResult.error ||
       rateResult.error ||
       accountResult.error ||
+      campaignResult.error ||
       tagResult.error;
 
     if (error) {
@@ -330,6 +371,7 @@ export default function BroadcastsClient() {
     setTemplates((templateResult.data ?? []) as Template[]);
     const accountRows = (accountResult.data ?? []) as Account[];
     setAccounts(accountRows);
+    setCampaigns((campaignResult.data ?? []) as CampaignOption[]);
     setTags((tagResult.data ?? []) as Tag[]);
     setChannelId((current) =>
       current && accountRows.some((item) => item.id === current)
@@ -457,6 +499,7 @@ export default function BroadcastsClient() {
     setWizardStep(1);
     setName("");
     setSourceType("CRM_STATUS");
+    setCampaignId("");
     setTemplateId("");
     setAudience(["LEAD"]);
     setSelectedTagId("");
@@ -1070,6 +1113,7 @@ export default function BroadcastsClient() {
         .insert({
           organization_id: organizationId,
           whatsapp_account_id: channelId,
+          campaign_id: campaignId || null,
           name: name.trim(),
           template_id: selectedTemplate.id,
           category: selectedTemplate.category,
@@ -1146,6 +1190,126 @@ export default function BroadcastsClient() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function loadBroadcastDetails(broadcast: Broadcast) {
+    if (!organizationId) return;
+
+    if (expandedBroadcastId === broadcast.id && detailsByBroadcast[broadcast.id]) {
+      setExpandedBroadcastId(null);
+      return;
+    }
+
+    setExpandedBroadcastId(broadcast.id);
+    setDetailsLoadingId(broadcast.id);
+
+    const { data: recipients, error: recipientsError } = await supabase
+      .from("broadcast_recipients")
+      .select(
+        "id,contact_id,recipient_name,phone_e164,status,error_code,error_message,exclude_reason,sent_at,delivered_at,read_at"
+      )
+      .eq("broadcast_id", broadcast.id)
+      .order("created_at")
+      .limit(2000);
+
+    if (recipientsError) {
+      setDetailsLoadingId(null);
+      setMessage(recipientsError.message);
+      return;
+    }
+
+    const details = (recipients ?? []) as BroadcastRecipientDetail[];
+    setDetailsByBroadcast((current) => ({
+      ...current,
+      [broadcast.id]: details
+    }));
+
+    const sentRecipients = details.filter(
+      (recipient) => recipient.contact_id && recipient.sent_at
+    );
+
+    if (!sentRecipients.length) {
+      setResponseRates((current) => ({
+        ...current,
+        [broadcast.id]: { responses: 0, base: 0, rate: 0 }
+      }));
+      setDetailsLoadingId(null);
+      return;
+    }
+
+    const contactIds = [...new Set(
+      sentRecipients
+        .map((recipient) => recipient.contact_id)
+        .filter(Boolean) as string[]
+    )];
+
+    const conversationMap = new Map<string, string>();
+    const conversationIds: string[] = [];
+
+    for (let index = 0; index < contactIds.length; index += 400) {
+      const batch = contactIds.slice(index, index + 400);
+      const { data: conversationRows } = await supabase
+        .from("conversations")
+        .select("id,contact_id")
+        .eq("organization_id", organizationId)
+        .in("contact_id", batch);
+
+      for (const conversation of conversationRows ?? []) {
+        conversationMap.set(conversation.id, conversation.contact_id);
+        conversationIds.push(conversation.id);
+      }
+    }
+
+    const firstSentAt = sentRecipients
+      .map((recipient) => new Date(recipient.sent_at as string).getTime())
+      .reduce((minimum, value) => Math.min(minimum, value), Number.MAX_SAFE_INTEGER);
+
+    const inboundByContact = new Map<string, number>();
+
+    for (let index = 0; index < conversationIds.length; index += 400) {
+      const batch = conversationIds.slice(index, index + 400);
+      const { data: inboundRows } = await supabase
+        .from("messages")
+        .select("conversation_id,created_at")
+        .eq("organization_id", organizationId)
+        .eq("direction", "INBOUND")
+        .gte("created_at", new Date(firstSentAt).toISOString())
+        .in("conversation_id", batch)
+        .order("created_at");
+
+      for (const row of inboundRows ?? []) {
+        const contactId = conversationMap.get(row.conversation_id);
+        if (!contactId) continue;
+        const timestamp = new Date(row.created_at).getTime();
+        const current = inboundByContact.get(contactId);
+        if (current === undefined || timestamp < current) {
+          inboundByContact.set(contactId, timestamp);
+        }
+      }
+    }
+
+    let responses = 0;
+    for (const recipient of sentRecipients) {
+      const firstInbound = inboundByContact.get(recipient.contact_id as string);
+      if (
+        firstInbound !== undefined &&
+        firstInbound >= new Date(recipient.sent_at as string).getTime()
+      ) {
+        responses += 1;
+      }
+    }
+
+    const base = sentRecipients.length;
+    setResponseRates((current) => ({
+      ...current,
+      [broadcast.id]: {
+        responses,
+        base,
+        rate: base ? Math.round((responses / base) * 100) : 0
+      }
+    }));
+
+    setDetailsLoadingId(null);
   }
 
   async function startBroadcast(broadcast: Broadcast) {
@@ -1376,6 +1540,21 @@ export default function BroadcastsClient() {
                         {channel.verified_name || "WhatsApp"} ·{" "}
                         {channel.display_phone_number || "sem telefone"} ·{" "}
                         {channel.status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="builderField">
+                  <label>Campanha / grupo (opcional)</label>
+                  <select
+                    value={campaignId}
+                    onChange={(event) => setCampaignId(event.target.value)}
+                  >
+                    <option value="">Sem campanha vinculada</option>
+                    {campaigns.map((campaign) => (
+                      <option key={campaign.id} value={campaign.id}>
+                        {campaign.name}
                       </option>
                     ))}
                   </select>
@@ -1955,6 +2134,12 @@ export default function BroadcastsClient() {
                   </strong>
                 </div>
                 <div>
+                  <span>Campanha / grupo</span>
+                  <strong>
+                    {campaigns.find((item) => item.id === campaignId)?.name || "Sem campanha"}
+                  </strong>
+                </div>
+                <div>
                   <span>Template</span>
                   <strong>{selectedTemplate?.name || "—"}</strong>
                 </div>
@@ -2094,7 +2279,15 @@ export default function BroadcastsClient() {
                     </div>
                     <p>
                       Template: <strong>{template?.name || "—"}</strong> ·{" "}
-                      {categoryLabels[broadcast.category]}
+                      {categoryLabels[broadcast.category]} · Canal:{" "}
+                      <strong>
+                        {one(broadcast.whatsapp_accounts)?.verified_name ||
+                          one(broadcast.whatsapp_accounts)?.display_phone_number ||
+                          "—"}
+                      </strong>
+                      {one(broadcast.campaigns)?.name
+                        ? ` · Campanha: ${one(broadcast.campaigns)?.name}`
+                        : ""}
                     </p>
                   </div>
 
@@ -2168,6 +2361,15 @@ export default function BroadcastsClient() {
                   </div>
 
                   <div className="cardActions">
+                    <button
+                      onClick={() => void loadBroadcastDetails(broadcast)}
+                    >
+                      {detailsLoadingId === broadcast.id
+                        ? "Calculando..."
+                        : expandedBroadcastId === broadcast.id
+                          ? "Ocultar detalhes"
+                          : "Detalhes / resposta"}
+                    </button>
                     {["READY", "SENDING"].includes(broadcast.status) && (
                       <button
                         className="sendBroadcastButton"
@@ -2214,6 +2416,83 @@ export default function BroadcastsClient() {
                     )}
                   </div>
                 </div>
+
+                {expandedBroadcastId === broadcast.id && (
+                  <div className="broadcastDetailsPanel">
+                    <div className="broadcastDetailsSummary">
+                      <div>
+                        <span>Taxa de resposta</span>
+                        <strong>
+                          {responseRates[broadcast.id]
+                            ? `${responseRates[broadcast.id].rate}%`
+                            : detailsLoadingId === broadcast.id
+                              ? "…"
+                              : "0%"}
+                        </strong>
+                        <small>
+                          Critério: contato enviou mensagem inbound depois do envio deste lote.
+                        </small>
+                      </div>
+                      <div>
+                        <span>Respostas</span>
+                        <strong>
+                          {responseRates[broadcast.id]
+                            ? `${responseRates[broadcast.id].responses}/${responseRates[broadcast.id].base}`
+                            : "—"}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>Excluídos antes do envio</span>
+                        <strong>{broadcast.excluded_count}</strong>
+                      </div>
+                    </div>
+
+                    <div className="broadcastRecipientTable">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Destinatário</th>
+                            <th>Status</th>
+                            <th>Enviado</th>
+                            <th>Entregue</th>
+                            <th>Lido</th>
+                            <th>Erro / exclusão</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(detailsByBroadcast[broadcast.id] ?? [])
+                            .slice(0, 100)
+                            .map((recipient) => (
+                              <tr key={recipient.id}>
+                                <td>
+                                  <strong>
+                                    {recipient.recipient_name || recipient.phone_e164}
+                                  </strong>
+                                  <span>{recipient.phone_e164}</span>
+                                </td>
+                                <td>{recipient.status}</td>
+                                <td>{recipient.sent_at ? "✓" : "—"}</td>
+                                <td>{recipient.delivered_at ? "✓" : "—"}</td>
+                                <td>{recipient.read_at ? "✓" : "—"}</td>
+                                <td>
+                                  {recipient.exclude_reason ||
+                                    recipient.error_message ||
+                                    recipient.error_code ||
+                                    "—"}
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                      {(detailsByBroadcast[broadcast.id]?.length ?? 0) > 100 && (
+                        <small>
+                          Mostrando os primeiros 100 de{" "}
+                          {detailsByBroadcast[broadcast.id].length} destinatários.
+                        </small>
+                      )}
+                    </div>
+                  </div>
+                )}
               </article>
             );
           })}
