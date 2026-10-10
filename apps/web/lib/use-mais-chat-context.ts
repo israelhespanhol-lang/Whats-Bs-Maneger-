@@ -56,6 +56,10 @@ export function primeMaisChatContextSnapshot(
   return cachedSnapshot;
 }
 
+export function clearMaisChatContextSnapshot() {
+  cachedSnapshot = null;
+}
+
 export function useMaisChatContext() {
   const router = useRouter();
   const initial = getMaisChatContextSnapshot();
@@ -179,7 +183,7 @@ export function useMaisChatContext() {
   }, [refreshUnread, router]);
 
   async function signOut() {
-    cachedSnapshot = null;
+    clearMaisChatContextSnapshot();
     await supabase.auth.signOut();
     router.replace("/login");
   }
