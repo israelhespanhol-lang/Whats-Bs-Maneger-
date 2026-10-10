@@ -3682,3 +3682,179 @@
   font-size: 8px;
   font-weight: 750;
 }
+
+
+/* FINAL sidebar override: Corporate SaaS */
+.sectionAppShell .sidebar,
+.appShell .sidebar {
+  background: linear-gradient(180deg, #091421 0%, #07111b 100%) !important;
+  border-right: 1px solid #1a2b3d !important;
+  box-shadow: inset -1px 0 0 rgba(255,255,255,.015) !important;
+}
+
+.sectionAppShell .brandWithLogo,
+.appShell .brandWithLogo {
+  padding: 0 8px 13px !important;
+  border-bottom: 1px solid rgba(132,155,178,.12) !important;
+  gap: 7px !important;
+}
+
+.sectionAppShell .brandLogo,
+.appShell .brandLogo {
+  width: 104px !important;
+  padding: 4px !important;
+  border-radius: 8px !important;
+  background: rgba(255,255,255,.96) !important;
+  box-shadow: 0 7px 20px rgba(0,0,0,.16) !important;
+}
+
+.sectionAppShell .productName,
+.appShell .productName {
+  color: #d7e2e9 !important;
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  letter-spacing: .16em !important;
+}
+
+.sectionAppShell .sidebarNav,
+.appShell .sidebarNav {
+  gap: 15px !important;
+  padding-top: 3px !important;
+}
+
+.sectionAppShell .sidebarNavGroup,
+.appShell .sidebarNavGroup {
+  gap: 3px !important;
+}
+
+.sectionAppShell .sidebarNavLabel,
+.appShell .sidebarNavLabel {
+  padding: 0 10px 5px !important;
+  color: #617487 !important;
+  font-size: 7px !important;
+  letter-spacing: .16em !important;
+}
+
+.sectionAppShell .sidebar .navItem,
+.appShell .sidebar .navItem {
+  position: relative !important;
+  min-height: 38px !important;
+  margin: 0 !important;
+  padding: 0 10px !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: #9dabb7 !important;
+  box-shadow: none !important;
+  font-size: 10px !important;
+  font-weight: 650 !important;
+}
+
+.sectionAppShell .sidebar .navItem::before,
+.appShell .sidebar .navItem::before {
+  content: "" !important;
+  position: absolute !important;
+  left: 0 !important;
+  top: 8px !important;
+  bottom: 8px !important;
+  width: 2px !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+}
+
+.sectionAppShell .sidebar .navItem:hover,
+.appShell .sidebar .navItem:hover {
+  background: rgba(255,255,255,.025) !important;
+  border-color: rgba(127,151,174,.10) !important;
+  color: #dde5ea !important;
+}
+
+.sectionAppShell .sidebar .navItem.active,
+.appShell .sidebar .navItem.active {
+  background: linear-gradient(
+    90deg,
+    rgba(48,228,120,.08) 0%,
+    rgba(48,228,120,.028) 42%,
+    rgba(255,255,255,.012) 100%
+  ) !important;
+  border-color: rgba(103,130,151,.18) !important;
+  box-shadow: none !important;
+  color: #eef5f3 !important;
+}
+
+.sectionAppShell .sidebar .navItem.active::before,
+.appShell .sidebar .navItem.active::before {
+  background: #30e478 !important;
+  box-shadow: 0 0 10px rgba(48,228,120,.28) !important;
+}
+
+.sectionAppShell .sidebar .navItem .navIcon,
+.appShell .sidebar .navItem .navIcon {
+  width: 18px !important;
+  flex: 0 0 18px !important;
+  color: #728596 !important;
+  font-size: 10px !important;
+  background: transparent !important;
+}
+
+.sectionAppShell .sidebar .navItem.active .navIcon,
+.appShell .sidebar .navItem.active .navIcon {
+  color: #72e89c !important;
+}
+
+.sectionAppShell .sidebar .navItem .navLabel,
+.appShell .sidebar .navItem .navLabel {
+  color: inherit !important;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
+.sectionAppShell .sidebar .navItem.active .navLabel,
+.appShell .sidebar .navItem.active .navLabel {
+  color: #eef5f3 !important;
+  font-weight: 760 !important;
+}
+
+.sectionAppShell .sidebar .navBadge,
+.appShell .sidebar .navBadge {
+  min-width: 19px !important;
+  height: 19px !important;
+  padding: 0 5px !important;
+  border: 1px solid rgba(48,228,120,.20) !important;
+  background: rgba(48,228,120,.09) !important;
+  color: #72e89c !important;
+  box-shadow: none !important;
+  font-size: 8px !important;
+}
+
+.sectionAppShell .sidebarFooter,
+.appShell .sidebarFooter {
+  gap: 7px !important;
+}
+
+.sectionAppShell .themeToggle,
+.appShell .themeToggle {
+  min-height: 36px !important;
+  padding: 7px 9px !important;
+  border: 1px solid rgba(123,148,169,.14) !important;
+  border-radius: 8px !important;
+  background: rgba(255,255,255,.018) !important;
+  color: #b7c4ce !important;
+  box-shadow: none !important;
+}
+
+.sectionAppShell .sidebarUser,
+.appShell .sidebarUser {
+  padding: 10px 7px !important;
+  border-top: 1px solid rgba(123,148,169,.12) !important;
+  border-bottom: 1px solid rgba(123,148,169,.12) !important;
+}
+
+.sectionAppShell .connection,
+.appShell .connection {
+  padding: 6px 7px 0 !important;
+  color: #7e909d !important;
+  font-size: 8px !important;
+}
