@@ -71,7 +71,8 @@ body {
   color: var(--text);
 }
 
-body,
+/* Page background must never animate through a white intermediate
+   frame during a client-side route transition. Only controls animate. */
 button,
 input {
   transition:
