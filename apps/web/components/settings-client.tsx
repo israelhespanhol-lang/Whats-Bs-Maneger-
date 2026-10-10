@@ -191,7 +191,7 @@ export default function SettingsClient() {
         </div>
         <Link className="secondaryAction" href="/settings/whatsapp" prefetch>
           Revisar integração →
-        </a>
+        </Link>
       </section>
 
       {message && <div className="sectionNotice">{message}</div>}
