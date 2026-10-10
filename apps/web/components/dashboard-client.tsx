@@ -1413,9 +1413,13 @@ export default function DashboardClient() {
                 >
                   Cancelar
                 </button>
-                <a className="secondaryAction" href="/settings/whatsapp">
+                <button
+                  type="button"
+                  className="secondaryAction"
+                  onClick={() => router.push("/settings/whatsapp")}
+                >
                   Configurar canal
-                </a>
+                </button>
                 <button
                   type="button"
                   className="primaryAction"
