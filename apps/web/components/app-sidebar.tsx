@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import BrandLogo from "./brand-logo";
 import ThemeToggle from "./theme-toggle";
 
@@ -88,17 +89,18 @@ export default function AppSidebar({
           <div className="sidebarNavGroup" key={group.label}>
             <span className="sidebarNavLabel">{group.label}</span>
             {group.items.map((item) => (
-              <a
+              <Link
                 key={item.id}
                 className={`navItem ${active === item.id ? "active" : ""}`}
                 href={item.href}
+                prefetch
               >
                 <i className="navIcon" aria-hidden="true">{item.icon}</i>
                 <span className="navLabel">{item.label}</span>
                 {item.id === "conversations" && unread > 0 && (
                   <span className="navBadge">{unread}</span>
                 )}
-              </a>
+              </Link>
             ))}
           </div>
         ))}
