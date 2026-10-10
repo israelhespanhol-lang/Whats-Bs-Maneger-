@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import SectionLayout from "./section-layout";
 import { supabase } from "../lib/supabase";
 import { useMaisChatContext } from "../lib/use-mais-chat-context";
