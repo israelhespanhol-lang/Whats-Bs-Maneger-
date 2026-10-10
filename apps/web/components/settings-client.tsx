@@ -63,7 +63,7 @@ export default function SettingsClient() {
       description="Gerencie a operação, a conexão do WhatsApp e os acessos da equipe."
     >
       <div className="settingsOverviewGrid">
-        <a className="settingsHubCard" href="/settings/whatsapp">
+        <Link className="settingsHubCard" href="/settings/whatsapp" prefetch>
           <div className="settingsHubIcon">◉</div>
           <div>
             <span>Canal</span>
@@ -75,7 +75,7 @@ export default function SettingsClient() {
             </p>
           </div>
           <strong>→</strong>
-        </a>
+        </Link>
 
         <article className="settingsHubCard staticCard">
           <div className="settingsHubIcon">◇</div>
@@ -189,7 +189,7 @@ export default function SettingsClient() {
             O navegador recebe apenas identificadores públicos necessários para a interface.
           </p>
         </div>
-        <a className="secondaryAction" href="/settings/whatsapp">
+        <Link className="secondaryAction" href="/settings/whatsapp" prefetch>
           Revisar integração →
         </a>
       </section>
