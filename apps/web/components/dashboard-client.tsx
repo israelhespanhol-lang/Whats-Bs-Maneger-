@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import BrandLogo from "./brand-logo";
 import AppSidebar from "./app-sidebar";
 import { supabase } from "../lib/supabase";
+import {
+  clearMaisChatContextSnapshot,
+  getMaisChatContextSnapshot,
+  primeMaisChatContextSnapshot
+} from "../lib/use-mais-chat-context";
 
 type Membership = {
   id: string;
@@ -200,13 +205,18 @@ function sortConversations(items: Conversation[]) {
 
 export default function DashboardClient() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [membership, setMembership] = useState<Membership | null>(null);
+  const cachedShell = getMaisChatContextSnapshot();
+  const [loading, setLoading] = useState(!cachedShell?.membership);
+  const [membership, setMembership] = useState<Membership | null>(
+    (cachedShell?.membership as Membership | null) ?? null
+  );
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [userName, setUserName] = useState("Usuário");
-  const [account, setAccount] = useState<WhatsAppAccount | null>(null);
+  const [userName, setUserName] = useState(cachedShell?.userName ?? "Usuário");
+  const [account, setAccount] = useState<WhatsAppAccount | null>(
+    (cachedShell?.account as WhatsAppAccount | null) ?? null
+  );
   const [accounts, setAccounts] = useState<WhatsAppAccount[]>([]);
   const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
   const [channelDraftIds, setChannelDraftIds] = useState<string[]>([]);
@@ -428,11 +438,17 @@ export default function DashboardClient() {
 
       if (!active) return;
 
-      setUserName(
+      const nextUserName =
         session.user.user_metadata?.name ||
-          session.user.email?.split("@")[0] ||
-          "Usuário"
-      );
+        session.user.email?.split("@")[0] ||
+        "Usuário";
+
+      setUserName(nextUserName);
+      primeMaisChatContextSnapshot({
+        userId: session.user.id,
+        userName: nextUserName,
+        error: null
+      });
 
       const { data: member, error: memberError } = await supabase
         .from("organization_members")
@@ -443,6 +459,7 @@ export default function DashboardClient() {
 
       if (memberError) {
         setError(memberError.message);
+        primeMaisChatContextSnapshot({ error: memberError.message });
         setLoading(false);
         return;
       }
@@ -454,6 +471,10 @@ export default function DashboardClient() {
 
       const typedMember = member as Membership;
       setMembership(typedMember);
+      primeMaisChatContextSnapshot({
+        membership: typedMember,
+        error: null
+      });
 
       const { data: accountRows } = await supabase
         .from("whatsapp_accounts")
@@ -462,8 +483,10 @@ export default function DashboardClient() {
         .order("created_at", { ascending: true });
 
       const typedAccounts = (accountRows ?? []) as WhatsAppAccount[];
+      const nextAccount = typedAccounts[0] ?? null;
       setAccounts(typedAccounts);
-      setAccount(typedAccounts[0] ?? null);
+      setAccount(nextAccount);
+      primeMaisChatContextSnapshot({ account: nextAccount });
       setSelectedChannelIds(
         typedAccounts
           .filter((item) => item.status === "CONNECTED")
@@ -513,6 +536,21 @@ export default function DashboardClient() {
   useEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!membership) return;
+
+    primeMaisChatContextSnapshot({
+      membership,
+      account,
+      userName,
+      unread: conversations.reduce(
+        (sum, item) => sum + Number(item.unread_count ?? 0),
+        0
+      ),
+      error
+    });
+  }, [membership, account, userName, conversations, error]);
 
   useEffect(() => {
     if (!membership) return;
@@ -1048,6 +1086,7 @@ export default function DashboardClient() {
   }
 
   async function signOut() {
+    clearMaisChatContextSnapshot();
     await supabase.auth.signOut();
     router.replace("/login");
   }
@@ -1865,7 +1904,13 @@ export default function DashboardClient() {
             <div className="infoBlock crmInspectorBlock">
               <div className="inspectorLabelRow">
                 <span className="sectionLabel">ETIQUETAS</span>
-                <a href="/crm">Gerenciar</a>
+                <button
+                  type="button"
+                  className="inspectorManageButton"
+                  onClick={() => router.push("/crm")}
+                >
+                  Gerenciar
+                </button>
               </div>
               <div className="inspectorTags">
                 {allTags.length === 0 ? (
