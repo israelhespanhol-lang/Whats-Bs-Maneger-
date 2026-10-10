@@ -3673,3 +3673,12 @@
     width: 100%;
   }
 }
+
+.inspectorManageButton {
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  padding: 0;
+  font-size: 8px;
+  font-weight: 750;
+}
