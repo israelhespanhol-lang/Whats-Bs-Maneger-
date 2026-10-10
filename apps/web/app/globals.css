@@ -5439,3 +5439,32 @@ a.settingsHubCard:hover {
     left: 2px;
   }
 }
+
+
+/* Empty inbox state must span the full chat grid */
+.chat > .chatEmpty {
+  grid-row: 1 / -1;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  align-self: stretch;
+  justify-self: stretch;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  padding: 40px 28px;
+  overflow: auto;
+}
+
+.chat > .chatEmpty .largeEmptyIcon {
+  margin: 0 auto;
+}
+
+.chat > .chatEmpty h2 {
+  margin-top: 16px;
+}
+
+.chat > .chatEmpty p {
+  margin-top: 8px;
+  max-width: 460px;
+}
