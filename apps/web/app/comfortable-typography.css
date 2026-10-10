@@ -1,0 +1,518 @@
+/*
+ * Mais Chat — Comfortable reading scale (desktop + responsive)
+ * Imported AFTER legacy styles to prevent tiny typography overrides.
+ * Typography-only treatment with modest layout adjustments; no behavior changes.
+ */
+
+/* Shared reading rhythm */
+.appShell,
+.sectionAppShell {
+  font-size: 14px;
+  line-height: 1.48;
+}
+.appShell button,
+.appShell input,
+.appShell select,
+.appShell textarea,
+.sectionAppShell button,
+.sectionAppShell input,
+.sectionAppShell select,
+.sectionAppShell textarea {
+  font-family: inherit;
+  line-height: 1.35;
+}
+.appShell input::placeholder,
+.sectionAppShell input::placeholder,
+.sectionAppShell textarea::placeholder {
+  opacity: 0.9;
+}
+
+/* Four-column workspace: give readable text sufficient horizontal room */
+.appShell {
+  grid-template-columns: 216px 348px minmax(475px, 1fr) 318px;
+}
+.appShell.contactPanelClosed {
+  grid-template-columns: 216px 348px minmax(475px, 1fr);
+}
+.sectionAppShell {
+  grid-template-columns: 216px minmax(0, 1fr);
+}
+
+/* Navigation: no bright-green labels, readable hit areas */
+.appShell .sidebar .navItem,
+.sectionAppShell .sidebar .navItem {
+  min-height: 44px !important;
+  font-size: 13px !important;
+  padding-inline: 11px !important;
+  line-height: 1.4;
+}
+.appShell .sidebar .navItem .navLabel,
+.sectionAppShell .sidebar .navItem .navLabel {
+  font-size: 13px !important;
+  font-weight: 640;
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+.appShell .sidebar .navItem .navIcon,
+.sectionAppShell .sidebar .navItem .navIcon {
+  font-size: 15px !important;
+}
+.appShell .sidebarNavLabel,
+.sectionAppShell .sidebarNavLabel {
+  font-size: 10px !important;
+  letter-spacing: .12em !important;
+  color: #98aabb !important;
+  padding-bottom: 7px !important;
+}
+.appShell .productName,
+.sectionAppShell .productName {
+  font-size: 12px !important;
+  letter-spacing: .12em !important;
+}
+.appShell .sidebar .navBadge,
+.sectionAppShell .sidebar .navBadge {
+  min-width: 22px !important;
+  height: 22px !important;
+  font-size: 11px !important;
+  padding: 0 6px !important;
+}
+.appShell .themeText,
+.sectionAppShell .themeText {
+  font-size: 13px !important;
+}
+.appShell .themeToggle,
+.sectionAppShell .themeToggle {
+  min-height: 42px !important;
+  font-size: 13px !important;
+}
+.appShell .sidebarUser strong,
+.sectionAppShell .sidebarUser strong {
+  font-size: 12px !important;
+  line-height: 1.4;
+}
+.appShell .sidebarUser span,
+.sectionAppShell .sidebarUser span {
+  font-size: 11px !important;
+}
+.appShell .connection,
+.sectionAppShell .connection {
+  font-size: 11px !important;
+}
+
+/* Inbox search, tabs and conversation list */
+.appShell .conversationList .flowInboxHeader {
+  min-height: 104px;
+}
+.appShell .flowInboxHeader .eyebrow {
+  font-size: 10px !important;
+}
+.appShell .conversationList .flowInboxHeader h1 {
+  font-size: 23px !important;
+  line-height: 1.25;
+}
+.appShell .conversationOrdering {
+  font-size: 12px !important;
+  line-height: 1.5;
+}
+.appShell .conversationSearchRow .search {
+  min-height: 44px;
+}
+.appShell .conversationSearchRow .search input,
+.appShell .conversationSearchRow .search input::placeholder {
+  font-size: 14px !important;
+}
+.appShell .conversationFilterButton,
+.appShell .conversationAddButton {
+  height: 44px;
+  font-size: 17px;
+}
+.appShell .flowInboxTabs .filter {
+  min-height: 38px;
+  font-size: 12px !important;
+  padding: 7px 10px;
+}
+.appShell .flowInboxTabs .filter span {
+  height: 20px;
+  min-width: 20px;
+  font-size: 11px !important;
+}
+.appShell .flowConversationItem {
+  min-height: 112px !important;
+  padding: 13px 11px !important;
+}
+.appShell .flowConversationItem .avatar {
+  width: 42px;
+  height: 42px;
+  font-size: 14px !important;
+}
+.appShell .conversationTop strong {
+  font-size: 15px !important;
+  line-height: 1.4;
+}
+.appShell .flowConversationItem .conversationTop time {
+  font-size: 11px !important;
+}
+.appShell .conversationPhone {
+  font-size: 12px !important;
+  line-height: 1.4;
+}
+.appShell .conversationCopy .conversationPreview {
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  max-width: 100%;
+  white-space: normal;
+}
+.appShell .conversationTags {
+  gap: 5px;
+  margin-top: 7px;
+}
+.appShell .conversationTags span {
+  font-size: 10px !important;
+  max-width: 128px;
+  padding: 3px 6px;
+}
+.appShell .flowConversationItem .badge {
+  min-width: 24px;
+  height: 24px;
+  font-size: 12px !important;
+}
+.appShell .assigneeMini {
+  width: 22px;
+  height: 22px;
+  font-size: 9px !important;
+}
+.appShell .emptyList strong {
+  font-size: 15px !important;
+}
+.appShell .emptyList p {
+  font-size: 13px !important;
+}
+.appShell .channelSelectorButton {
+  min-height: 58px;
+}
+.appShell .channelSelectorButton strong {
+  font-size: 13px !important;
+}
+.appShell .channelSelectorButton span {
+  font-size: 11px !important;
+}
+.appShell .conversationFilterPanel :is(select, button, span) {
+  font-size: 12px !important;
+}
+.channelPickerModal :is(strong, label, select, button, span, em) {
+  font-size: 12px !important;
+}
+
+/* Active chat: messages, timestamps, top actions */
+.appShell .chat {
+  min-width: 0;
+  grid-template-rows: 94px minmax(0, 1fr) 136px;
+}
+.appShell .contactIdentityCopy > strong {
+  font-size: 16px !important;
+  max-width: 240px;
+}
+.appShell .contactIdentityCopy > span {
+  font-size: 12px !important;
+}
+.appShell .chatHeaderTags {
+  gap: 5px;
+  max-width: 310px;
+}
+.appShell .chatHeaderTags > span {
+  font-size: 10px !important;
+  padding: 3px 7px;
+}
+.appShell .flowLikeChatActions .headerAction {
+  min-height: 38px;
+  font-size: 11px !important;
+  padding: 0 10px;
+}
+.appShell .flowLikeChatActions .iconAction {
+  font-size: 16px !important;
+}
+.appShell .headerAssigneeSelect {
+  height: 38px;
+  max-width: 165px;
+  font-size: 12px !important;
+}
+.appShell .messages {
+  padding: 26px 26px 32px;
+}
+.appShell .bubble {
+  font-size: 15px !important;
+  line-height: 1.56;
+  padding: 10px 13px 8px;
+  margin-bottom: 9px;
+  max-width: min(73%, 680px);
+}
+.appShell .bubble small {
+  font-size: 11px !important;
+  line-height: 1.35;
+}
+.appShell .dayDivider span {
+  font-size: 12px !important;
+  padding: 6px 13px;
+}
+.appShell .chatEmpty h2 {
+  font-size: 23px !important;
+}
+.appShell .chatEmpty p,
+.appShell .emptyMessages p {
+  font-size: 15px !important;
+  max-width: 520px;
+  line-height: 1.6;
+}
+.appShell .messageSearchBar input {
+  font-size: 14px !important;
+}
+.appShell .messageSearchCount {
+  font-size: 12px !important;
+}
+
+/* Composer: adequate controls and legible placeholder */
+.appShell .flowLikeComposer {
+  grid-template-rows: 39px minmax(54px, 1fr);
+  padding-block: 10px 12px;
+  gap: 8px;
+}
+.appShell .composerToolButton {
+  font-size: 11px !important;
+  height: 34px !important;
+  padding: 0 10px;
+}
+.appShell .composerInputRow > input {
+  min-height: 52px;
+  font-size: 15px !important;
+}
+.appShell .composerInputRow > input::placeholder {
+  font-size: 15px !important;
+}
+.appShell .composerInputRow .send {
+  width: 46px;
+  height: 46px;
+  font-size: 18px !important;
+}
+.appShell .composerInputRow .emojiButton {
+  font-size: 18px !important;
+}
+
+/* Contact inspector */
+.appShell .contactPanelHeader strong {
+  font-size: 15px !important;
+}
+.appShell .contactHero h2 {
+  font-size: 20px !important;
+  line-height: 1.3;
+}
+.appShell .contactHero p {
+  font-size: 13px !important;
+}
+.appShell .contactHeroActions a,
+.appShell .contactHeroActions button {
+  min-height: 40px;
+  font-size: 12px !important;
+}
+.appShell .contactSearchBox {
+  height: 42px;
+}
+.appShell .contactSearchBox input {
+  font-size: 13px !important;
+}
+.appShell .contactPanel .infoBlock {
+  padding-block: 15px;
+}
+.appShell .contactPanel .sectionLabel {
+  font-size: 11px !important;
+  letter-spacing: .08em;
+}
+.appShell .contactPanel .statusPill,
+.appShell .contactPanel .inspectorSelect {
+  min-height: 43px;
+  font-size: 13px !important;
+  line-height: 1.4;
+}
+.appShell .contactPanel .inspectorTags button,
+.appShell .inspectorLabelRow .inspectorManageButton {
+  font-size: 11px !important;
+}
+.appShell .contactPanel .windowCard strong {
+  font-size: 13px !important;
+}
+.appShell .contactPanel .windowCard span,
+.appShell .emptyInspectorText {
+  font-size: 12px !important;
+  line-height: 1.5;
+}
+
+/* Product sections (CRM, Templates, Disparos, Contatos, Relatórios) */
+.sectionAppShell .sectionHeader .eyebrow {
+  font-size: 11px !important;
+}
+.sectionAppShell .sectionDescription {
+  font-size: 15px !important;
+  line-height: 1.55;
+}
+.sectionAppShell .primaryAction,
+.sectionAppShell .secondaryAction {
+  font-size: 14px !important;
+  min-height: 44px;
+}
+.sectionAppShell .metricCard span {
+  font-size: 14px !important;
+}
+.sectionAppShell .metricCard small {
+  font-size: 12px !important;
+}
+.sectionAppShell .dataTable th,
+.sectionAppShell .importPreview th,
+.sectionAppShell .recipientReviewTable th,
+.sectionAppShell .broadcastRecipientTable th {
+  font-size: 12px !important;
+}
+.sectionAppShell .dataTable td,
+.sectionAppShell .importPreview td,
+.sectionAppShell .recipientReviewTable td,
+.sectionAppShell .broadcastRecipientTable td {
+  font-size: 13px !important;
+}
+.sectionAppShell .dataTable td strong {
+  font-size: 14px !important;
+}
+.sectionAppShell :is(input, select, textarea):not([type="color"]):not([type="checkbox"]):not([type="radio"]) {
+  font-size: 14px !important;
+}
+.sectionAppShell :is(input, textarea)::placeholder {
+  font-size: 14px;
+}
+.sectionAppShell :is(
+  .inlineCreateCard label,
+  .templateCreateCard label,
+  .campaignCreateCard label,
+  .builderField > label,
+  .builderSectionHeader strong,
+  .wizardSourcePanel > label,
+  .crmQuickForms label
+) {
+  font-size: 13px !important;
+}
+.sectionAppShell :is(
+  .fieldHint,
+  .builderField > small,
+  .sectionNotice,
+  .sectionInfo,
+  .safetyBanner,
+  .builderHintPill,
+  .templateMeta,
+  .campaignMeta
+) {
+  font-size: 12px !important;
+}
+.sectionAppShell :is(.templateCategory, .statePill, .recipientStatus, .templateFavoriteFilter) {
+  font-size: 11px !important;
+}
+.sectionAppShell :is(.templateCard > p, .campaignCardTop p) {
+  font-size: 14px !important;
+}
+.sectionAppShell :is(.templateCard h3, .campaignCard h3) {
+  font-size: 18px !important;
+}
+.sectionAppShell :is(.cardActions button, .audiencePicker button, .campaignAudienceLabels, .campaignStats span) {
+  font-size: 12px !important;
+}
+.sectionAppShell .campaignStats strong {
+  font-size: 15px !important;
+}
+.sectionAppShell :is(
+  .builderProgress button,
+  .broadcastWizardSteps button strong,
+  .broadcastSourceGrid button strong,
+  .variableMappingRow > strong,
+  .crmColumn > header strong,
+  .crmCardTop strong,
+  .wizardPanelHeading p:not(.eyebrow),
+  .wizardCostNotice p,
+  .wizardNoSendNotice span,
+  .broadcastDetailsSummary span,
+  .broadcastDetailsSummary small
+) {
+  font-size: 12px !important;
+}
+.sectionAppShell :is(
+  .broadcastSourceGrid button span,
+  .wizardSourcePanel > small,
+  .fileDrop span,
+  .importPreview span,
+  .crmCardTop span,
+  .crmCardTop time,
+  .crmCard > p,
+  .crmTag,
+  .crmEmptyColumn
+) {
+  font-size: 12px !important;
+}
+.sectionAppShell :is(
+  .crmTabs button,
+  .crmControlBar > select,
+  .crmSearch input,
+  .crmQuickForms input,
+  .crmColumnActions button
+) {
+  font-size: 12px !important;
+}
+.sectionAppShell .crmCardTop strong {
+  font-size: 14px !important;
+}
+.sectionAppShell .crmColumn > header strong {
+  font-size: 14px !important;
+}
+.sectionAppShell .crmCard {
+  padding: 12px;
+}
+.sectionAppShell .crmColumn {
+  flex-basis: 306px;
+}
+.sectionAppShell .crmAvatar {
+  font-size: 12px !important;
+}
+
+/* Medium screens: keep labels legible and let action captions collapse naturally */
+@media (max-width: 1420px) {
+  .appShell {
+    grid-template-columns: 200px 320px minmax(430px, 1fr) 294px;
+  }
+  .appShell.contactPanelClosed {
+    grid-template-columns: 200px 320px minmax(430px, 1fr);
+  }
+  .appShell .headerAssigneeSelect {
+    max-width: 125px;
+  }
+  .appShell .flowLikeChatActions .headerAction {
+    width: 38px;
+    min-width: 38px;
+    padding: 0;
+  }
+}
+@media (max-width: 1180px) {
+  .appShell,
+  .appShell.contactPanelClosed {
+    grid-template-columns: 80px 320px minmax(430px, 1fr);
+  }
+  .appShell .sidebar .navItem,
+  .sectionAppShell .sidebar .navItem {
+    justify-content: center;
+    padding: 0 !important;
+  }
+  .appShell .contactPanel {
+    display: none;
+  }
+}
+@media (max-width: 820px) {
+  .appShell,
+  .appShell.contactPanelClosed {
+    grid-template-columns: 72px minmax(270px, 320px) minmax(360px, 1fr);
+  }
+  .appShell .bubble {
+    max-width: 83%;
+  }
+}
