@@ -516,3 +516,101 @@
     max-width: 83%;
   }
 }
+
+
+/*
+ * FIX: Keep the message composer visible inside the viewport.
+ * The expanded text increased the grid item's intrinsic min-content height,
+ * so the chat column pushed its composer below the app's 100vh boundary.
+ * Give every nested grid/flex track an explicit shrinkable height and
+ * scroll only the messages panel.
+ */
+.appShell {
+  height: 100dvh;
+  min-height: 0;
+  max-height: 100dvh;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.appShell > .sidebar,
+.appShell > .conversationList,
+.appShell > .chat,
+.appShell > .contactPanel {
+  min-height: 0;
+  max-height: 100%;
+}
+
+.appShell > .conversationList,
+.appShell > .chat {
+  height: 100%;
+  overflow: hidden;
+}
+
+.appShell .chat {
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  grid-template-rows: minmax(80px, 94px) minmax(0, 1fr) minmax(126px, 136px);
+}
+
+.appShell .chat > .chatHeader {
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.appShell .chat > .messages {
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+
+.appShell .chat > .flowLikeComposer {
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  align-self: stretch;
+  grid-template-rows: 39px minmax(0, 1fr);
+}
+
+.appShell .chat > .flowLikeComposer .composerToolbar {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.appShell .chat > .flowLikeComposer .composerInputRow {
+  min-height: 0;
+  align-self: center;
+}
+
+.appShell .chat > .flowLikeComposer .composerInputRow > input {
+  height: 52px;
+  min-height: 0;
+}
+
+.appShell .chat > .chatEmpty {
+  grid-row: 1 / -1;
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+/* Avoid clipping composer on shorter laptop viewports. */
+@media (max-height: 740px) {
+  .appShell .chat {
+    grid-template-rows: minmax(68px, 82px) minmax(0, 1fr) 118px;
+  }
+  .appShell .chat > .flowLikeComposer {
+    padding-block: 7px 8px;
+    grid-template-rows: 34px minmax(0, 1fr);
+  }
+  .appShell .composerInputRow > input {
+    height: 48px;
+  }
+}
