@@ -1,5 +1,6 @@
 import "./globals.css";
 import "./product-sections.css";
+import "./comfortable-typography.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
