@@ -21,15 +21,55 @@ export type MaisChatAccount = {
   verified_name: string | null;
 };
 
+export type MaisChatContextSnapshot = {
+  membership: MaisChatMembership | null;
+  account: MaisChatAccount | null;
+  userName: string;
+  userId: string | null;
+  unread: number;
+  error: string | null;
+};
+
+let cachedSnapshot: MaisChatContextSnapshot | null = null;
+
+export function getMaisChatContextSnapshot() {
+  return cachedSnapshot;
+}
+
+export function primeMaisChatContextSnapshot(
+  patch: Partial<MaisChatContextSnapshot>
+) {
+  const base: MaisChatContextSnapshot = cachedSnapshot ?? {
+    membership: null,
+    account: null,
+    userName: "Usuário",
+    userId: null,
+    unread: 0,
+    error: null
+  };
+
+  cachedSnapshot = {
+    ...base,
+    ...patch
+  };
+
+  return cachedSnapshot;
+}
+
 export function useMaisChatContext() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [membership, setMembership] = useState<MaisChatMembership | null>(null);
-  const [account, setAccount] = useState<MaisChatAccount | null>(null);
-  const [userName, setUserName] = useState("Usuário");
-  const [userId, setUserId] = useState<string | null>(null);
-  const [unread, setUnread] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const initial = getMaisChatContextSnapshot();
+  const [loading, setLoading] = useState(!initial?.membership);
+  const [membership, setMembership] = useState<MaisChatMembership | null>(
+    initial?.membership ?? null
+  );
+  const [account, setAccount] = useState<MaisChatAccount | null>(
+    initial?.account ?? null
+  );
+  const [userName, setUserName] = useState(initial?.userName ?? "Usuário");
+  const [userId, setUserId] = useState<string | null>(initial?.userId ?? null);
+  const [unread, setUnread] = useState(initial?.unread ?? 0);
+  const [error, setError] = useState<string | null>(initial?.error ?? null);
 
   const refreshUnread = useCallback(async (organizationId: string) => {
     const { data } = await supabase
@@ -37,12 +77,13 @@ export function useMaisChatContext() {
       .select("unread_count")
       .eq("organization_id", organizationId);
 
-    setUnread(
-      (data ?? []).reduce(
-        (sum, item) => sum + Number(item.unread_count ?? 0),
-        0
-      )
+    const nextUnread = (data ?? []).reduce(
+      (sum, item) => sum + Number(item.unread_count ?? 0),
+      0
     );
+
+    setUnread(nextUnread);
+    primeMaisChatContextSnapshot({ unread: nextUnread });
   }, []);
 
   useEffect(() => {
@@ -60,12 +101,18 @@ export function useMaisChatContext() {
 
       if (!active) return;
 
-      setUserId(session.user.id);
-      setUserName(
+      const nextUserName =
         session.user.user_metadata?.name ||
-          session.user.email?.split("@")[0] ||
-          "Usuário"
-      );
+        session.user.email?.split("@")[0] ||
+        "Usuário";
+
+      setUserId(session.user.id);
+      setUserName(nextUserName);
+      primeMaisChatContextSnapshot({
+        userId: session.user.id,
+        userName: nextUserName,
+        error: null
+      });
 
       const { data: member, error: memberError } = await supabase
         .from("organization_members")
@@ -75,13 +122,19 @@ export function useMaisChatContext() {
         .maybeSingle();
 
       if (memberError || !member) {
-        setError(memberError?.message ?? "Usuário sem organização.");
+        const nextError = memberError?.message ?? "Usuário sem organização.";
+        setError(nextError);
+        primeMaisChatContextSnapshot({ error: nextError });
         setLoading(false);
         return;
       }
 
       const typedMember = member as MaisChatMembership;
       setMembership(typedMember);
+      primeMaisChatContextSnapshot({
+        membership: typedMember,
+        error: null
+      });
 
       const { data: accountData } = await supabase
         .from("whatsapp_accounts")
@@ -93,7 +146,9 @@ export function useMaisChatContext() {
 
       if (!active) return;
 
-      setAccount((accountData ?? null) as MaisChatAccount | null);
+      const nextAccount = (accountData ?? null) as MaisChatAccount | null;
+      setAccount(nextAccount);
+      primeMaisChatContextSnapshot({ account: nextAccount });
       await refreshUnread(typedMember.organization_id);
 
       channel = supabase
@@ -124,6 +179,7 @@ export function useMaisChatContext() {
   }, [refreshUnread, router]);
 
   async function signOut() {
+    cachedSnapshot = null;
     await supabase.auth.signOut();
     router.replace("/login");
   }
