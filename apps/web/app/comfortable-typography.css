@@ -1190,3 +1190,32 @@
   .appShell .chatEmojiGrid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .appShell .chatQuickReplyFields { grid-template-columns: 1fr; }
 }
+
+
+/* Phase 3: compact, visible handoff history for supervisors and agents. */
+.appShell .teamAssignmentHistory {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 175px;
+  overflow-y: auto;
+}
+.appShell .teamAssignmentEvent {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  background: var(--surface-soft);
+}
+.appShell .teamAssignmentEvent strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+.appShell .teamAssignmentEvent small, .appShell .teamAssignmentHistory > small {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
