@@ -4021,3 +4021,30 @@
   .teamMemberRow { align-items: flex-start; flex-wrap: wrap; }
   .teamMemberActions { flex: 1 0 100%; justify-content: flex-start; padding-left: 49px; }
 }
+
+
+/* Team invite email status stays next to the actual invite form. */
+.teamInviteAlert {
+  margin: 14px 0 4px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+.teamInviteAlertInfo {
+  color: var(--text);
+  border-color: color-mix(in srgb, #6b9ecf 36%, var(--border));
+  background: color-mix(in srgb, #6b9ecf 10%, var(--surface));
+}
+.teamInviteAlertSuccess {
+  color: var(--accent-strong);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: var(--accent-soft);
+}
+.teamInviteAlertError {
+  color: #f6b1b8;
+  border-color: color-mix(in srgb, #ef7380 45%, var(--border));
+  background: color-mix(in srgb, #e76271 10%, var(--surface));
+}
