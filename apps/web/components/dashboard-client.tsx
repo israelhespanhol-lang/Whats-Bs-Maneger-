@@ -1573,6 +1573,8 @@ export default function DashboardClient() {
         unread={unread}
         userName={userName}
         role={membership.role}
+        memberId={membership.id}
+        organizationId={membership.organization_id}
         connected={connected}
         displayPhoneNumber={account?.display_phone_number}
         onSignOut={() => void signOut()}
