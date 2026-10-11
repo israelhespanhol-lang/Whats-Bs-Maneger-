@@ -2101,23 +2101,43 @@ export default function DashboardClient() {
                       key={message.id}
                       className={`bubble ${message.direction === "INBOUND" ? "incoming" : "outgoing"}`}
                     >
-                      {message.body || (
-                        <span className="mediaPlaceholder">
-                          {message.message_type === "image"
-                            ? "Imagem"
-                            : message.message_type === "document"
-                              ? "Documento"
-                              : message.message_type === "audio"
-                                ? "Áudio"
-                                : message.message_type}
-                        </span>
+                      {message.reply_to_message_id && (
+                        <div className="chatQuotedBubble">
+                          <strong>↩ Resposta</strong>
+                          <span>{byMessageId.get(message.reply_to_message_id)?.body ||
+                            (byMessageId.get(message.reply_to_message_id)?.message_type
+                              ? "[" + byMessageId.get(message.reply_to_message_id)?.message_type + "]"
+                              : "Mensagem anterior")}</span>
+                        </div>
                       )}
+                      {["image", "document", "audio", "video", "sticker"].includes(message.message_type) ? (
+                        <>
+                          {message.body && <span className="chatMediaCaption">{message.body}</span>}
+                          {!message.optimistic && !message.id.startsWith("optimistic-") && (
+                            <MessageMedia messageId={message.id} kind={message.message_type} label={message.body}/>
+                          )}
+                        </>
+                      ) : (
+                        <span className="chatMessageText">{message.body || "[" + message.message_type + "]"}</span>
+                      )}
+                      <div className="chatMessageMeta">
+                        <button className="chatReplyAction" type="button"
+                          disabled={message.optimistic || message.id.startsWith("optimistic-")}
+                          title="Responder citando esta mensagem"
+                          onClick={() => {
+                            setQuotedMessage(message);
+                            setComposerTool(null);
+                            messageInputRef.current?.focus();
+                          }}>
+                          ↩ Responder
+                        </button>
                       <small>
                         {time(message.created_at)}
                         {message.direction === "OUTBOUND"
                           ? ` ${statusIcon(message.status)}`
                           : ""}
                       </small>
+                      </div>
                     </div>
                   ))}
                   <div ref={messagesEndRef} aria-hidden="true" />
@@ -2126,6 +2146,30 @@ export default function DashboardClient() {
             </div>
 
             <footer className={`composer flowLikeComposer ${connected ? "" : "composerLocked"}`}>
+              {quotedMessage && (
+                <div className="chatReplyPreview">
+                  <div>
+                    <strong>↩ Respondendo à mensagem</strong>
+                    <span>{quotedMessage.body || "[" + quotedMessage.message_type + "]"}</span>
+                  </div>
+                  <button type="button" onClick={() => setQuotedMessage(null)} aria-label="Cancelar resposta citada">×</button>
+                </div>
+              )}
+              {recordedAudio && recordedPreviewUrl && (
+                <div className="chatVoicePreview">
+                  <strong>Gravação pronta — revise antes de enviar</strong>
+                  <audio controls src={recordedPreviewUrl}/>
+                  <div className="chatVoicePreviewActions">
+                    <button type="button" onClick={() => setRecordedAudio(null)} disabled={uploading}>Descartar</button>
+                    <button type="button" disabled={uploading || sending || !connected || windowText === "Janela encerrada"}
+                      onClick={() => void (async () => {
+                        if (await sendAttachment(recordedAudio)) setRecordedAudio(null);
+                      })()}>
+                      {uploading ? "Enviando..." : "Enviar áudio"}
+                    </button>
+                  </div>
+                </div>
+              )}
               {(composerTool === "notes" || composerTool === "quick" || composerTool === "emoji" || draft.startsWith("/")) && (
                 <div className="chatUtilityPopover" role="region" aria-label="Ferramentas de atendimento">
                   <div className="chatUtilityHeader">
@@ -2194,7 +2238,7 @@ export default function DashboardClient() {
                 ref={fileInputRef}
                 className="attachmentInput"
                 type="file"
-                accept="image/*,application/pdf"
+                accept="image/jpeg,image/png,application/pdf,audio/mpeg,audio/mp4,audio/aac,audio/ogg,.mp3,.m4a,.aac,.ogg"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) void sendAttachment(file);
@@ -2223,7 +2267,7 @@ export default function DashboardClient() {
                   <button
                     type="button"
                     className="composerToolButton"
-                    title="Enviar imagem ou PDF"
+                    title="Anexar imagem, PDF ou áudio"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={
                       !connected ||
@@ -2234,6 +2278,14 @@ export default function DashboardClient() {
                   >
                     ⌕ <span>{uploading ? "Enviando..." : "Anexos"}</span>
                   </button>
+                  <VoiceRecorder
+                    disabled={!connected || sending || uploading || Boolean(recordedAudio) || windowText === "Janela encerrada"}
+                    onReady={(file) => {
+                      setRecordedAudio(file);
+                      setComposerTool(null);
+                    }}
+                    onError={(message) => setError(message)}
+                  />
                   <button
                     type="button"
                     className="composerToolButton"
