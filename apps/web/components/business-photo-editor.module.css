@@ -86,6 +86,10 @@
   border-radius: 14px;
   outline-offset: 4px;
 }
+.whiteViewport {
+  background: #ffffff;
+  background-image: none;
+}
 .viewport:active { cursor: grabbing; }
 .image {
   position: absolute;
@@ -102,20 +106,20 @@
   box-shadow: 0 0 0 500px rgba(3, 11, 21, .57);
   pointer-events: none;
 }
-.dragHint {
+.safeGuide {
   position: absolute;
-  z-index: 1;
-  bottom: 13px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(3, 11, 21, .72);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
+  inset: 18px;
+  border: 2px dashed rgba(255, 255, 255, .82);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .32);
   pointer-events: none;
+}
+.whiteViewport .circleGuide {
+  border-color: rgba(23, 47, 64, .9);
+}
+.whiteViewport .safeGuide {
+  border-color: rgba(19, 84, 111, .85);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .55);
 }
 .previewCaption {
   max-width: 375px;

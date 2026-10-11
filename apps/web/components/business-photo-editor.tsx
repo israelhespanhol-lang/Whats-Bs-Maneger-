@@ -14,6 +14,9 @@ type Props = {
 };
 
 const OUTPUT_SIZE = 640;
+// A fit-to-square base scale + extra breathing room keeps logos and names visible.
+const MIN_ZOOM = 0.55;
+const DEFAULT_ZOOM = 0.82;
 const MAX_ZOOM = 3;
 
 function clamp(value: number, minimum: number, maximum: number) {
@@ -24,7 +27,7 @@ export default function BusinessPhotoEditor({ file, onCancel, onConfirm }: Props
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [dimensions, setDimensions] = useState<Dimensions | null>(null);
   const [viewportSize, setViewportSize] = useState(320);
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const [offset, setOffset] = useState<Offset>({ x: 0, y: 0 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +39,7 @@ export default function BusinessPhotoEditor({ file, onCancel, onConfirm }: Props
     const url = URL.createObjectURL(file);
     setImageUrl(url);
     setDimensions(null);
-    setZoom(1);
+    setZoom(DEFAULT_ZOOM);
     setOffset({ x: 0, y: 0 });
     setError(null);
     return () => URL.revokeObjectURL(url);
@@ -67,12 +70,14 @@ export default function BusinessPhotoEditor({ file, onCancel, onConfirm }: Props
   }, []);
 
   const baseScale = dimensions
-    ? Math.max(viewportSize / dimensions.width, viewportSize / dimensions.height)
+    ? Math.min(viewportSize / dimensions.width, viewportSize / dimensions.height)
     : 1;
   const imageWidth = dimensions ? dimensions.width * baseScale * zoom : 0;
   const imageHeight = dimensions ? dimensions.height * baseScale * zoom : 0;
-  const maxX = Math.max(0, (imageWidth - viewportSize) / 2);
-  const maxY = Math.max(0, (imageHeight - viewportSize) / 2);
+  // Above viewport size: clamp to avoid uncovered edges while dragging.
+  // Below viewport size: allow positioning the complete image inside the square.
+  const maxX = Math.abs(imageWidth - viewportSize) / 2;
+  const maxY = Math.abs(imageHeight - viewportSize) / 2;
 
   useEffect(() => {
     setOffset((current) => ({
@@ -82,12 +87,12 @@ export default function BusinessPhotoEditor({ file, onCancel, onConfirm }: Props
   }, [maxX, maxY]);
 
   function updateZoom(value: number) {
-    const next = clamp(value, 1, MAX_ZOOM);
+    const next = clamp(value, MIN_ZOOM, MAX_ZOOM);
     const ratio = next / zoom;
     const nextWidth = dimensions ? dimensions.width * baseScale * next : 0;
     const nextHeight = dimensions ? dimensions.height * baseScale * next : 0;
-    const nextMaxX = Math.max(0, (nextWidth - viewportSize) / 2);
-    const nextMaxY = Math.max(0, (nextHeight - viewportSize) / 2);
+    const nextMaxX = Math.abs(nextWidth - viewportSize) / 2;
+    const nextMaxY = Math.abs(nextHeight - viewportSize) / 2;
     setOffset((current) => ({
       x: clamp(current.x * ratio, -nextMaxX, nextMaxX),
       y: clamp(current.y * ratio, -nextMaxY, nextMaxY)
@@ -143,8 +148,12 @@ export default function BusinessPhotoEditor({ file, onCancel, onConfirm }: Props
       if (!ctx) throw new Error("Seu navegador não conseguiu preparar a foto.");
 
       const factor = OUTPUT_SIZE / viewportSize;
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+      // Keep transparent pixels for PNG logos; flatten JPEGs onto white.
+      // The editor displays the same background as the generated file.
+      if (file.type !== "image/png") {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+      }
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(
@@ -154,15 +163,20 @@ export default function BusinessPhotoEditor({ file, onCancel, onConfirm }: Props
         imageWidth * factor,
         imageHeight * factor
       );
+      const outputIsPng = file.type === "image/png";
+      const outputMime = outputIsPng ? "image/png" : "image/jpeg";
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(
           (result) => result ? resolve(result) : reject(new Error("Não foi possível gerar a foto.")),
-          "image/jpeg",
+          outputMime,
           0.92
         );
       });
-      onConfirm(new File([blob], "foto-perfil-comercial.jpg", {
-        type: "image/jpeg",
+      if (blob.size > 4 * 1024 * 1024) {
+        throw new Error("O arquivo ficou maior que 4 MB. Experimente uma foto mais simples.");
+      }
+      onConfirm(new File([blob], outputIsPng ? "foto-perfil-comercial.png" : "foto-perfil-comercial.jpg", {
+        type: outputMime,
         lastModified: Date.now()
       }));
     } catch (cause) {
@@ -187,7 +201,7 @@ export default function BusinessPhotoEditor({ file, onCancel, onConfirm }: Props
         <div className={styles.editorArea}>
           <div
             ref={viewportRef}
-            className={styles.viewport}
+            className={file.type === "image/png" ? styles.viewport : `${styles.viewport} ${styles.whiteViewport}`}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={endDrag}
@@ -221,9 +235,9 @@ export default function BusinessPhotoEditor({ file, onCancel, onConfirm }: Props
               />
             )}
             <div className={styles.circleGuide} aria-hidden="true" />
-            <div className={styles.dragHint} aria-hidden="true">Arraste para mover</div>
+            <div className={styles.safeGuide} aria-hidden="true" />
           </div>
-          <div className={styles.previewCaption}>A área dentro do círculo simula como a foto ficará visível aos clientes. O arquivo será salvo quadrado.</div>
+          <div className={styles.previewCaption}>Arraste para mover. O círculo externo mostra o recorte do WhatsApp; mantenha a logo e o texto dentro do círculo pontilhado para ter margem de segurança.</div>
         </div>
 
         <div className={styles.controls}>
@@ -232,11 +246,11 @@ export default function BusinessPhotoEditor({ file, onCancel, onConfirm }: Props
             <span>{Math.round(zoom * 100)}%</span>
           </div>
           <div className={styles.zoomRow}>
-            <button type="button" className={styles.zoomButton} onClick={() => updateZoom(zoom - 0.1)} aria-label="Diminuir zoom" disabled={busy || !dimensions || zoom <= 1}>−</button>
+            <button type="button" className={styles.zoomButton} onClick={() => updateZoom(zoom - 0.1)} aria-label="Diminuir zoom" disabled={busy || !dimensions || zoom <= MIN_ZOOM}>−</button>
             <input
               id="business-photo-zoom"
               type="range"
-              min="100"
+              min="55"
               max="300"
               step="1"
               value={Math.round(zoom * 100)}
@@ -246,7 +260,7 @@ export default function BusinessPhotoEditor({ file, onCancel, onConfirm }: Props
             />
             <button type="button" className={styles.zoomButton} onClick={() => updateZoom(zoom + 0.1)} aria-label="Aumentar zoom" disabled={busy || !dimensions || zoom >= MAX_ZOOM}>+</button>
           </div>
-          <button type="button" className={styles.resetButton} onClick={() => { setZoom(1); setOffset({ x: 0, y: 0 }); }} disabled={busy || !dimensions}>
+          <button type="button" className={styles.resetButton} onClick={() => { setZoom(DEFAULT_ZOOM); setOffset({ x: 0, y: 0 }); }} disabled={busy || !dimensions}>
             Restaurar enquadramento
           </button>
         </div>
@@ -254,7 +268,7 @@ export default function BusinessPhotoEditor({ file, onCancel, onConfirm }: Props
         {error && <p className={styles.error} role="alert">{error}</p>}
 
         <footer className={styles.footer}>
-          <span>Saída: JPG 640 × 640</span>
+          <span>Saída: {file.type === "image/png" ? "PNG" : "JPG"} 640 × 640</span>
           <div className={styles.actions}>
             <button type="button" className={styles.cancel} onClick={onCancel} disabled={busy}>Cancelar</button>
             <button type="button" className={styles.confirm} onClick={() => void confirmCrop()} disabled={busy || !dimensions || !!error}>
