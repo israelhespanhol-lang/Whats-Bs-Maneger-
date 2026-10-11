@@ -40,6 +40,12 @@ type Conversation = {
   contacts: Contact | Contact[] | null;
 };
 
+type AssignmentEvent = {
+  id: string;
+  from_member_id: string | null;
+  to_member_id: string | null;
+  created_at: string;
+};
 type InternalNote = {
   id: string;
   conversation_id: string;
@@ -257,6 +263,7 @@ export default function DashboardClient() {
   const [draft, setDraft] = useState("");
   const [composerTool, setComposerTool] = useState<ComposerTool>(null);
   const [internalNotes, setInternalNotes] = useState<InternalNote[]>([]);
+  const [assignmentEvents, setAssignmentEvents] = useState<AssignmentEvent[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
@@ -874,6 +881,24 @@ export default function DashboardClient() {
   }, [membership]);
 
   useEffect(() => {
+    if (!selectedId) { setAssignmentEvents([]); return; }
+    let live = true;
+    async function loadAssignments() {
+      const { data } = await supabase.from("conversation_assignment_history")
+        .select("id,from_member_id,to_member_id,created_at")
+        .eq("conversation_id", selectedId).order("created_at", { ascending: false }).limit(20);
+      if (live) setAssignmentEvents((data ?? []) as AssignmentEvent[]);
+    }
+    void loadAssignments();
+    const channel = supabase.channel(`assignment-events:${selectedId}`)
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "conversation_assignment_history",
+        filter: `conversation_id=eq.${selectedId}`
+      }, () => void loadAssignments()).subscribe();
+    return () => { live = false; void supabase.removeChannel(channel); };
+  }, [selectedId]);
+
+  useEffect(() => {
     if (!selectedId) { setInternalNotes([]); return; }
     let active = true;
     async function loadNotes() {
@@ -1058,7 +1083,7 @@ export default function DashboardClient() {
   async function toggleConversationClosed() {
     if (!selected || !membership) return;
 
-    const nextStatus = selected.status === "CLOSED" ? "OPEN" : "CLOSED";
+    const nextStatus = selected.status === "RESOLVED" ? "OPEN" : "RESOLVED";
     setActionsOpen(false);
 
     setConversations((current) =>
@@ -1741,9 +1766,9 @@ export default function DashboardClient() {
                   type="button"
                   className="headerAction dangerAction"
                   onClick={() => void toggleConversationClosed()}
-                  title={selected.status === "CLOSED" ? "Reabrir conversa" : "Arquivar conversa"}
+                  title={selected.status === "RESOLVED" ? "Reabrir conversa" : "Arquivar conversa"}
                 >
-                  ▣ <span>{selected.status === "CLOSED" ? "Reabrir" : "Arquivar"}</span>
+                  ▣ <span>{selected.status === "RESOLVED" ? "Reabrir" : "Arquivar"}</span>
                 </button>
                 <select
                   className="headerAssigneeSelect"
@@ -1812,7 +1837,7 @@ export default function DashboardClient() {
                         type="button"
                         onClick={() => void toggleConversationClosed()}
                       >
-                        {selected.status === "CLOSED"
+                        {selected.status === "RESOLVED"
                           ? "Reabrir conversa"
                           : "Fechar conversa"}
                       </button>
@@ -2189,6 +2214,20 @@ export default function DashboardClient() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="infoBlock crmInspectorBlock">
+              <span className="sectionLabel">HISTÓRICO DE TRANSFERÊNCIAS</span>
+              <div className="teamAssignmentHistory">
+                {assignmentEvents.length === 0 ? (
+                  <small>Nenhuma transferência registrada ainda.</small>
+                ) : assignmentEvents.slice(0, 8).map((item) => (
+                  <div className="teamAssignmentEvent" key={item.id}>
+                    <strong>{item.to_member_id ? memberNames[item.to_member_id] || "Atendente" : "Fila de novos"}</strong>
+                    <small>{item.from_member_id ? `Antes: ${memberNames[item.from_member_id] || "Atendente"}` : "Atribuição inicial"} · {dateLabel(item.created_at)} {time(item.created_at)}</small>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="infoBlock crmInspectorBlock">
