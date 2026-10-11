@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ThemeToggle from "../../../components/theme-toggle";
 import BrandLogo from "../../../components/brand-logo";
@@ -22,6 +22,15 @@ export default function WhatsAppSettingsPage() {
   const router = useRouter();
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
+  const [memberRole, setMemberRole] = useState<"OWNER" | "ADMIN" | "AGENT" | null>(null);
+  const [remotePhotoUrl, setRemotePhotoUrl] = useState<string | null>(null);
+  const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [photoSaving, setPhotoSaving] = useState(false);
+  const [photoMessage, setPhotoMessage] = useState<string | null>(null);
+  const [photoSuccess, setPhotoSuccess] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [businessAccountId, setBusinessAccountId] = useState("");
   const [displayPhoneNumber, setDisplayPhoneNumber] = useState("");
@@ -42,7 +51,7 @@ export default function WhatsAppSettingsPage() {
 
       const { data: membership, error: membershipError } = await supabase
         .from("organization_members")
-        .select("organization_id")
+        .select("organization_id,role")
         .eq("user_id", session.user.id)
         .limit(1)
         .maybeSingle();
@@ -54,6 +63,7 @@ export default function WhatsAppSettingsPage() {
       }
 
       setOrganizationId(membership.organization_id);
+      setMemberRole(membership.role as "OWNER" | "ADMIN" | "AGENT");
 
       const { data: accountData } = await supabase
         .from("whatsapp_accounts")
@@ -78,6 +88,131 @@ export default function WhatsAppSettingsPage() {
 
     void load();
   }, [router]);
+
+  async function readPhotoError(error: any, response: any) {
+    if (typeof response?.error === "string") return response.error;
+    try {
+      const json = await error?.context?.json?.();
+      if (typeof json?.error === "string") return json.error;
+    } catch {
+      // Supabase may return a network error without a JSON response.
+    }
+    return error?.message || "Não foi possível conversar com a Meta.";
+  }
+
+  useEffect(() => {
+    if (!account?.id || account.status !== "CONNECTED") return;
+
+    let cancelled = false;
+    setPhotoLoading(true);
+
+    void (async () => {
+      const { data, error } = await supabase.functions.invoke(
+        "whatsapp-business-photo",
+        { body: { action: "get", accountId: account.id } }
+      );
+
+      if (cancelled) return;
+
+      if (error || data?.error) {
+        setPhotoMessage(await readPhotoError(error, data));
+      } else {
+        setRemotePhotoUrl(data?.profilePictureUrl ?? null);
+      }
+      setPhotoLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [account?.id, account?.status]);
+
+  useEffect(() => {
+    if (!selectedPhoto) {
+      setPhotoPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(selectedPhoto);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [selectedPhoto]);
+
+  function choosePhoto(file?: File) {
+    if (!file) return;
+    setPhotoMessage(null);
+    setPhotoSuccess(false);
+
+    if (!["image/jpeg", "image/png"].includes(file.type)) {
+      setSelectedPhoto(null);
+      setPhotoMessage("Selecione uma imagem JPG ou PNG.");
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024 || file.size < 4) {
+      setSelectedPhoto(null);
+      setPhotoMessage("Escolha uma foto de até 4 MB.");
+      return;
+    }
+    setSelectedPhoto(file);
+  }
+
+  async function readPhotoBase64(file: File) {
+    const value = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.onerror = () => reject(new Error("Não foi possível ler a imagem."));
+      reader.readAsDataURL(file);
+    });
+    const index = value.indexOf(",");
+    if (index < 0) throw new Error("Dados da imagem inválidos.");
+    return value.slice(index + 1);
+  }
+
+  async function saveBusinessPhoto() {
+    if (!account || !selectedPhoto || photoSaving) return;
+    if (!window.confirm(
+      `Alterar a foto pública do perfil comercial do WhatsApp ${account.display_phone_number || ""}? Essa foto será vista pelos clientes.`
+    )) return;
+
+    setPhotoSaving(true);
+    setPhotoSuccess(false);
+    setPhotoMessage(null);
+
+    try {
+      const dataBase64 = await readPhotoBase64(selectedPhoto);
+      const { data, error } = await supabase.functions.invoke(
+        "whatsapp-business-photo",
+        {
+          body: {
+            action: "update",
+            accountId: account.id,
+            mimeType: selectedPhoto.type,
+            dataBase64,
+            confirm: true
+          }
+        }
+      );
+
+      if (error || data?.error || data?.success !== true) {
+        setPhotoMessage(await readPhotoError(error, data));
+        return;
+      }
+
+      setPhotoSuccess(true);
+      setPhotoMessage(
+        data?.message ||
+          "A Meta aceitou a foto. Pode levar alguns minutos para aparecer aos clientes."
+      );
+      if (typeof data?.profilePictureUrl === "string") {
+        setRemotePhotoUrl(data.profilePictureUrl);
+      }
+    } catch (error) {
+      setPhotoMessage(
+        error instanceof Error ? error.message : "Não foi possível ler a imagem."
+      );
+    } finally {
+      setPhotoSaving(false);
+    }
+  }
 
   async function saveAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -296,6 +431,92 @@ export default function WhatsAppSettingsPage() {
             >
               Abrir Secrets do Supabase ↗
             </a>
+          </section>
+
+          <section className="settingsCard businessPhotoCard">
+            <div className="settingsCardHeader">
+              <div>
+                <span className="stepNumber">5</span>
+                <h2>Foto do perfil comercial</h2>
+              </div>
+              <span className="businessPhotoPublicLabel">Visível aos clientes</span>
+            </div>
+
+            <p className="settingsHint">
+              Esta é a imagem pública do número{" "}
+              <strong>{account?.display_phone_number || "WhatsApp"}</strong>.
+              A mudança é feita diretamente no perfil comercial da Meta;
+              não altera fotos de atendentes ou contatos.
+            </p>
+
+            <div className="businessPhotoEditor">
+              <div className="businessPhotoPreview">
+                {(photoPreview || remotePhotoUrl) ? (
+                  <img
+                    src={photoPreview || remotePhotoUrl || ""}
+                    alt={photoPreview ? "Prévia da nova foto comercial" : "Foto comercial atual"}
+                    onError={() => {
+                      if (!photoPreview) setRemotePhotoUrl(null);
+                    }}
+                  />
+                ) : (
+                  <span aria-hidden="true">MV</span>
+                )}
+              </div>
+              <div className="businessPhotoEditorContent">
+                <strong>
+                  {selectedPhoto
+                    ? "Nova foto selecionada"
+                    : photoLoading
+                      ? "Consultando a Meta..."
+                      : remotePhotoUrl
+                        ? "Foto comercial atual"
+                        : "Foto ainda não disponível"}
+                </strong>
+                <span>{selectedPhoto?.name || "Recomendado: imagem quadrada com a logo da Mais Viagens."}</span>
+                <div className="businessPhotoActions">
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png"
+                    className="businessPhotoFileInput"
+                    aria-label="Selecionar foto comercial"
+                    onChange={(event) => {
+                      choosePhoto(event.target.files?.[0]);
+                    }}
+                    disabled={photoSaving || !account || account.status !== "CONNECTED" || memberRole === "AGENT"}
+                  />
+                  <button
+                    className="detailsButton"
+                    type="button"
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={photoSaving || !account || account.status !== "CONNECTED" || memberRole === "AGENT"}
+                  >
+                    Escolher imagem
+                  </button>
+                  <button
+                    className="authPrimaryButton"
+                    type="button"
+                    disabled={!selectedPhoto || photoSaving || !account || account.status !== "CONNECTED" || memberRole === "AGENT"}
+                    onClick={() => void saveBusinessPhoto()}
+                  >
+                    {photoSaving ? "Atualizando na Meta..." : "Atualizar foto comercial"}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p className="settingsHint">
+              Aceita JPG ou PNG de até 4 MB. Apenas administradores podem alterar a foto.
+              A Meta pode demorar alguns minutos para atualizar o WhatsApp dos clientes.
+            </p>
+            {memberRole === "AGENT" && (
+              <p className="settingsHint">Peça a um administrador para alterar a foto comercial.</p>
+            )}
+            {photoMessage && (
+              <div className={`businessPhotoNotice ${photoSuccess ? "success" : "error"}`} role="status">
+                {photoMessage}
+              </div>
+            )}
           </section>
 
           <section className="settingsCard">
