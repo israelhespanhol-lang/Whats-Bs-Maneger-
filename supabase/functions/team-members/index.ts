@@ -157,7 +157,18 @@ Deno.serve(async (request: Request) => {
     const { data: hasMembership, error: lookupError } = await admin.from("organization_members")
       .select("id").eq("organization_id", orgId).eq("user_id", targetId).maybeSingle();
     if (lookupError) return respond({ error: "Falha ao verificar o usuário convidado." }, 500);
-    if (hasMembership) return respond({ error: "Esse e-mail já faz parte da equipe." }, 409);
+    if (hasMembership) {
+      // Membership conflicts are normal form-validation results, not a platform outage.
+      // Return a JSON application response so even an older cached frontend can
+      // display the explanation instead of the SDK's generic non-2xx error.
+      return respond({
+        ok: false,
+        code: "ALREADY_MEMBER",
+        error: targetId === actingId
+          ? "Você já está conectado com essa conta e faz parte da equipe. Não é necessário convidar seu próprio e-mail; nenhum convite foi enviado."
+          : "Este e-mail já faz parte da equipe. Nenhum novo convite foi enviado. Para testar, utilize um e-mail que ainda não pertença à organização."
+      });
+    }
 
     const { error: insertError } = await admin.from("organization_members").insert({
       organization_id: orgId,
