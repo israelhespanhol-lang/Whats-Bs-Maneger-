@@ -3,7 +3,8 @@ create table if not exists public.conversation_internal_notes (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   conversation_id uuid not null references public.conversations(id) on delete cascade,
-  created_by_member_id uuid not null references public.organization_members(id),
+  created_by_member_id uuid references public.organization_members(id) on delete set null,
+  created_by_name text not null default 'Atendente',
   body text not null check (char_length(trim(body)) between 1 and 4000),
   created_at timestamptz not null default now()
 );
@@ -38,7 +39,8 @@ create table if not exists public.team_quick_replies (
   shortcut text not null check (shortcut ~ '^[a-z0-9_-]{2,30}$'),
   title text not null check (char_length(trim(title)) between 1 and 100),
   body text not null check (char_length(trim(body)) between 1 and 4096),
-  created_by_member_id uuid not null references public.organization_members(id),
+  created_by_member_id uuid references public.organization_members(id) on delete set null,
+  created_by_name text not null default 'Atendente',
   created_at timestamptz not null default now(),
   unique (organization_id, shortcut)
 );
