@@ -85,7 +85,7 @@ export default function AppSidebar({
       </div>
 
       <nav className="sidebarNav">
-        {groups.map((group) => (
+        {groups.filter((group) => role !== "AGENT" || group.label !== "Operação").map((group) => (
           <div className="sidebarNavGroup" key={group.label}>
             <span className="sidebarNavLabel">{group.label}</span>
             {group.items.map((item) => (
