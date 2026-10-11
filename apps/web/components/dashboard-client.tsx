@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import BrandLogo from "./brand-logo";
 import AppSidebar from "./app-sidebar";
 import { supabase } from "../lib/supabase";
+import { recordClientMetric } from "../lib/performance-tracking";
 import {
   clearMaisChatContextSnapshot,
   getMaisChatContextSnapshot,
@@ -280,6 +281,7 @@ export default function DashboardClient() {
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const messageCacheRef = useRef<Map<string, CachedMessages>>(new Map());
   const conversationsRef = useRef<Conversation[]>([]);
+  const organizationIdRef = useRef<string | null>(cachedShell?.membership?.organization_id ?? null);
   const inboxRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [draft, setDraft] = useState("");
   const [composerTool, setComposerTool] = useState<ComposerTool>(null);
@@ -457,6 +459,7 @@ export default function DashboardClient() {
   }, [messages, messageSearch, messageSearchOpen]);
 
   const loadConversations = useCallback(async (organizationId: string) => {
+    const started = performance.now();
     const { data: rows, error: conversationError } = await supabase
       .from("conversations")
       .select(
@@ -518,10 +521,12 @@ export default function DashboardClient() {
       }
       setTagsByContact(map);
     }
+    recordClientMetric(organizationId, "INBOX_LOAD", performance.now() - started);
   }, []);
 
   const loadMessages = useCallback(
     async (conversationId: string, options?: { background?: boolean }) => {
+      const started = performance.now();
       const cached = messageCacheRef.current.get(conversationId);
       if (!options?.background && !cached) setMessagesLoading(true);
       const { data: rows, error: messageError } = await supabase
@@ -553,6 +558,7 @@ export default function DashboardClient() {
         }
       }
       if (selectedIdRef.current === conversationId) setMessagesLoading(false);
+      recordClientMetric(organizationIdRef.current, "MESSAGE_LOAD", performance.now() - started, Boolean(cached));
     },
     [writeMessageCache]
   );
@@ -637,6 +643,7 @@ export default function DashboardClient() {
       }
 
       const typedMember = member as Membership;
+      organizationIdRef.current = typedMember.organization_id;
       setMembership(typedMember);
       primeMaisChatContextSnapshot({
         membership: typedMember,
@@ -1073,6 +1080,7 @@ export default function DashboardClient() {
     setDraft("");
     setMessages((current) => upsertMessage(current, optimisticMessage));
 
+    const startedSend = performance.now();
     const { data, error: sendError } = await supabase.functions.invoke(
       "whatsapp-send",
       {
@@ -1082,6 +1090,7 @@ export default function DashboardClient() {
         }
       }
     );
+    recordClientMetric(organizationIdRef.current, "SEND_MESSAGE", performance.now() - startedSend);
 
     if (sendError || !data?.message) {
       setMessages((current) =>
