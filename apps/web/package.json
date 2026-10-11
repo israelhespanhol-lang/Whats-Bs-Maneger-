@@ -12,7 +12,8 @@
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "xlsx": "latest"
+    "xlsx": "latest",
+    "@breezystack/lamejs": "1.2.7"
   },
   "devDependencies": {
     "@types/node": "latest",
