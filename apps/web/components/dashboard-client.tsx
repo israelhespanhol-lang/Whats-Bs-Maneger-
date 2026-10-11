@@ -53,6 +53,9 @@ type Message = {
   optimistic?: boolean;
 };
 
+const MESSAGE_PAGE_SIZE = 80;
+const CACHE_LIMIT = 25;
+type CachedMessages = { items: Message[]; hasMore: boolean; fetchedAt: number };
 type ConversationFilter = "NEW" | "MINE" | "ALL";
 type ConversationOrder = "RECENT" | "UNREAD_RECENT";
 
@@ -231,6 +234,11 @@ export default function DashboardClient() {
     useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [olderLoading, setOlderLoading] = useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const messageCacheRef = useRef<Map<string, CachedMessages>>(new Map());
+  const conversationsRef = useRef<Conversation[]>([]);
+  const inboxRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -249,6 +257,30 @@ export default function DashboardClient() {
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
+
+  const writeMessageCache = useCallback((conversationId: string, items: Message[], hasMore?: boolean) => {
+    const cache = messageCacheRef.current;
+    const previous = cache.get(conversationId);
+    cache.delete(conversationId);
+    cache.set(conversationId, {
+      items,
+      hasMore: hasMore ?? previous?.hasMore ?? false,
+      fetchedAt: Date.now()
+    });
+    while (cache.size > CACHE_LIMIT) {
+      const oldest = cache.keys().next().value;
+      if (!oldest) break;
+      cache.delete(oldest);
+    }
+  }, []);
+
+  const patchSelectedMessages = useCallback((update: (current: Message[]) => Message[]) => {
+    setMessages((current) => {
+      const next = update(current);
+      if (selectedIdRef.current) writeMessageCache(selectedIdRef.current, next);
+      return next;
+    });
+  }, [writeMessageCache]);
 
   const selected = useMemo(
     () => conversations.find((item) => item.id === selectedId) ?? null,
@@ -377,6 +409,7 @@ export default function DashboardClient() {
     }
 
     const typedRows = (rows ?? []) as Conversation[];
+    conversationsRef.current = typedRows;
     setConversations(typedRows);
     setSelectedId((current) => {
       const next =
