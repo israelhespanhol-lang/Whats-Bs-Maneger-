@@ -186,6 +186,19 @@ function statusIcon(status: Message["status"]) {
   return "◷";
 }
 
+async function describeSendError(data: { error?: string } | null, failure: unknown, fallback: string) {
+  if (typeof data?.error === "string") return data.error;
+  const response = failure && typeof failure === "object" && "context" in failure
+    ? (failure as { context?: Response }).context : null;
+  if (response && typeof response.clone === "function") {
+    try {
+      const payload = await response.clone().json();
+      if (typeof payload?.error === "string") return payload.error;
+    } catch { /* Keep fallback when a response is not JSON. */ }
+  }
+  return fallback;
+}
+
 function windowRemaining(expiresAt: string | null) {
   if (!expiresAt) return null;
   const diff = new Date(expiresAt).getTime() - Date.now();
@@ -1008,9 +1021,9 @@ export default function DashboardClient() {
             : message
         )
       );
-      setError(
+      setError(await describeSendError(data, sendError,
         "Não foi possível enviar. Verifique a conexão do WhatsApp e a janela de atendimento."
-      );
+      ));
       setSending(false);
       return;
     }
@@ -1320,7 +1333,7 @@ export default function DashboardClient() {
               : message
           )
         );
-        throw new Error("Não foi possível enviar o anexo.");
+        throw new Error(await describeSendError(data, sendError, "Não foi possível enviar o anexo."));
       }
 
       const persisted = data.message as Message;
