@@ -53,6 +53,9 @@ type Message = {
   optimistic?: boolean;
 };
 
+const MESSAGE_PAGE_SIZE = 80;
+const CACHE_LIMIT = 25;
+type CachedMessages = { items: Message[]; hasMore: boolean; fetchedAt: number };
 type ConversationFilter = "NEW" | "MINE" | "ALL";
 type ConversationOrder = "RECENT" | "UNREAD_RECENT";
 
@@ -231,6 +234,11 @@ export default function DashboardClient() {
     useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [olderLoading, setOlderLoading] = useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const messageCacheRef = useRef<Map<string, CachedMessages>>(new Map());
+  const conversationsRef = useRef<Conversation[]>([]);
+  const inboxRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -249,6 +257,30 @@ export default function DashboardClient() {
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
+
+  const writeMessageCache = useCallback((conversationId: string, items: Message[], hasMore?: boolean) => {
+    const cache = messageCacheRef.current;
+    const previous = cache.get(conversationId);
+    cache.delete(conversationId);
+    cache.set(conversationId, {
+      items,
+      hasMore: hasMore ?? previous?.hasMore ?? false,
+      fetchedAt: Date.now()
+    });
+    while (cache.size > CACHE_LIMIT) {
+      const oldest = cache.keys().next().value;
+      if (!oldest) break;
+      cache.delete(oldest);
+    }
+  }, []);
+
+  const patchSelectedMessages = useCallback((update: (current: Message[]) => Message[]) => {
+    setMessages((current) => {
+      const next = update(current);
+      if (selectedIdRef.current) writeMessageCache(selectedIdRef.current, next);
+      return next;
+    });
+  }, [writeMessageCache]);
 
   const selected = useMemo(
     () => conversations.find((item) => item.id === selectedId) ?? null,
@@ -377,6 +409,7 @@ export default function DashboardClient() {
     }
 
     const typedRows = (rows ?? []) as Conversation[];
+    conversationsRef.current = typedRows;
     setConversations(typedRows);
     setSelectedId((current) => {
       const next =
@@ -426,31 +459,74 @@ export default function DashboardClient() {
 
   const loadMessages = useCallback(
     async (conversationId: string, options?: { background?: boolean }) => {
-      const background = options?.background ?? false;
-
-      if (!background) {
-        setMessagesLoading(true);
-      }
-
+      const cached = messageCacheRef.current.get(conversationId);
+      if (!options?.background && !cached) setMessagesLoading(true);
       const { data: rows, error: messageError } = await supabase
         .from("messages")
         .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at")
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: false })
-        .limit(500);
-
+        .limit(MESSAGE_PAGE_SIZE);
       if (messageError) {
-        setError(messageError.message);
-      } else if (selectedIdRef.current === conversationId) {
-        setMessages([...(rows ?? [])].reverse() as Message[]);
+        if (selectedIdRef.current === conversationId) setError(messageError.message);
+      } else {
+        const fetched = [...(rows ?? [])].reverse() as Message[];
+        const pending = (messageCacheRef.current.get(conversationId)?.items ?? [])
+          .filter((message) => message.optimistic);
+        const merged = sortMessages([
+          ...fetched,
+          ...pending.filter((item) => !fetched.some((row) => row.id === item.id))
+        ]);
+        const hasMore = fetched.length === MESSAGE_PAGE_SIZE;
+        writeMessageCache(conversationId, merged, hasMore);
+        if (selectedIdRef.current === conversationId) {
+          setMessages((current) => {
+            const live = current.filter((item) => !merged.some((server) => server.id === item.id));
+            const next = sortMessages([...merged, ...live]);
+            writeMessageCache(conversationId, next, hasMore);
+            return next;
+          });
+          setHasOlderMessages(hasMore);
+        }
       }
-
-      if (!background && selectedIdRef.current === conversationId) {
-        setMessagesLoading(false);
-      }
+      if (selectedIdRef.current === conversationId) setMessagesLoading(false);
     },
-    []
+    [writeMessageCache]
   );
+
+  const loadOlderMessages = useCallback(async () => {
+    const conversationId = selectedIdRef.current;
+    if (!conversationId || olderLoading || !hasOlderMessages) return;
+    const oldest = messageCacheRef.current.get(conversationId)?.items
+      .filter((message) => !message.optimistic)[0];
+    if (!oldest) return;
+    setOlderLoading(true);
+    shouldAutoScrollRef.current = false;
+    const { data, error: historyError } = await supabase
+      .from("messages")
+      .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at")
+      .eq("conversation_id", conversationId)
+      .lt("created_at", oldest.created_at)
+      .order("created_at", { ascending: false })
+      .limit(MESSAGE_PAGE_SIZE);
+    if (selectedIdRef.current === conversationId) {
+      if (historyError) setError(historyError.message);
+      else {
+        const older = [...(data ?? [])].reverse() as Message[];
+        const hasMore = older.length === MESSAGE_PAGE_SIZE;
+        setMessages((current) => {
+          const next = sortMessages([
+            ...older.filter((item) => !current.some((present) => present.id === item.id)),
+            ...current
+          ]);
+          writeMessageCache(conversationId, next, hasMore);
+          return next;
+        });
+        setHasOlderMessages(hasMore);
+      }
+    }
+    setOlderLoading(false);
+  }, [olderLoading, hasOlderMessages, writeMessageCache]);
 
   useEffect(() => {
     let active = true;
@@ -645,33 +721,32 @@ export default function DashboardClient() {
           const changed = payload.new as Partial<Conversation> & { id?: string };
           if (!changed.id) return;
 
-          let known = false;
-          setConversations((current) => {
-            const index = current.findIndex((item) => item.id === changed.id);
-            if (index === -1) return current;
-
-            known = true;
-            const next = [...current];
-            next[index] = {
-              ...next[index],
-              assigned_member_id:
-                changed.assigned_member_id ?? next[index].assigned_member_id,
-              status: changed.status ?? next[index].status,
-              unread_count:
-                changed.unread_count ?? next[index].unread_count,
-              last_message_at:
-                changed.last_message_at ?? next[index].last_message_at,
-              customer_service_window_expires_at:
-                changed.customer_service_window_expires_at ??
-                next[index].customer_service_window_expires_at
-            };
-
-            return sortConversations(next);
-          });
-
-          if (!known || payload.eventType === "INSERT") {
-            void loadConversations(membership.organization_id);
+          const known = conversationsRef.current.some((item) => item.id === changed.id);
+          if (!known) {
+            if (inboxRefreshTimerRef.current) clearTimeout(inboxRefreshTimerRef.current);
+            inboxRefreshTimerRef.current = setTimeout(() => {
+              void loadConversations(membership.organization_id);
+              inboxRefreshTimerRef.current = null;
+            }, 350);
+            return;
           }
+          setConversations((current) => sortConversations(current.map((item) => {
+            if (item.id !== changed.id) return item;
+            return {
+              ...item,
+              assigned_member_id: changed.assigned_member_id === undefined ? item.assigned_member_id : changed.assigned_member_id,
+              campaign_id: changed.campaign_id === undefined ? item.campaign_id : changed.campaign_id,
+              crm_stage_id: changed.crm_stage_id === undefined ? item.crm_stage_id : changed.crm_stage_id,
+              status: changed.status ?? item.status,
+              unread_count: changed.unread_count ?? item.unread_count,
+              last_message_at: changed.last_message_at === undefined ? item.last_message_at : changed.last_message_at,
+              last_message_preview: changed.last_message_preview === undefined ? item.last_message_preview : changed.last_message_preview,
+              last_message_direction: changed.last_message_direction === undefined ? item.last_message_direction : changed.last_message_direction,
+              customer_service_window_expires_at: changed.customer_service_window_expires_at === undefined
+                ? item.customer_service_window_expires_at
+                : changed.customer_service_window_expires_at
+            };
+          })));
 
         }
       )
@@ -679,20 +754,33 @@ export default function DashboardClient() {
 
     return () => {
       void supabase.removeChannel(channel);
+      if (inboxRefreshTimerRef.current) {
+        clearTimeout(inboxRefreshTimerRef.current);
+        inboxRefreshTimerRef.current = null;
+      }
     };
   }, [membership, loadConversations]);
 
   useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
+  useEffect(() => {
     if (!selectedId) {
       setMessages([]);
+      setHasOlderMessages(false);
       return;
     }
 
     selectedIdRef.current = selectedId;
     shouldAutoScrollRef.current = true;
-    setMessages([]);
-    void loadMessages(selectedId);
-
+    const cached = messageCacheRef.current.get(selectedId);
+    setMessages(cached?.items ?? []);
+    setHasOlderMessages(cached?.hasMore ?? false);
+    setMessagesLoading(!cached);
+    if (!cached || Date.now() - cached.fetchedAt > 20_000) {
+      void loadMessages(selectedId, { background: Boolean(cached) });
+    }
 
     const channel = supabase
       .channel(`messages:${selectedId}`)
@@ -709,20 +797,20 @@ export default function DashboardClient() {
 
           if (payload.eventType === "INSERT") {
             const incoming = payload.new as Message;
-            setMessages((current) => upsertMessage(current, incoming));
+            patchSelectedMessages((current) => upsertMessage(current, incoming));
             return;
           }
 
           if (payload.eventType === "UPDATE") {
             const incoming = payload.new as Message;
-            setMessages((current) => upsertMessage(current, incoming));
+            patchSelectedMessages((current) => upsertMessage(current, incoming));
             return;
           }
 
           if (payload.eventType === "DELETE") {
             const removedId = (payload.old as { id?: string })?.id;
             if (removedId) {
-              setMessages((current) =>
+              patchSelectedMessages((current) =>
                 current.filter((message) => message.id !== removedId)
               );
             }
@@ -734,7 +822,7 @@ export default function DashboardClient() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [selectedId, loadMessages]);
+  }, [selectedId, loadMessages, patchSelectedMessages]);
 
   async function sendMessage() {
     if (!selected || !draft.trim() || sending) return;
@@ -1657,6 +1745,14 @@ export default function DashboardClient() {
                 shouldAutoScrollRef.current = distanceFromBottom < 140;
               }}
             >
+              {hasOlderMessages && !messageSearch.trim() && (
+                <div className="messageHistoryLoad">
+                  <button type="button" className="detailsButton"
+                    onClick={() => void loadOlderMessages()} disabled={olderLoading}>
+                    {olderLoading ? "Buscando histórico..." : "Carregar mensagens anteriores"}
+                  </button>
+                </div>
+              )}
               {messagesLoading && messages.length === 0 ? (
                 <div className="messageState">Carregando mensagens...</div>
               ) : displayedMessages.length === 0 ? (

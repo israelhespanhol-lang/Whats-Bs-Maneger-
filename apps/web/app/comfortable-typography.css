@@ -1050,3 +1050,18 @@
     height: 34px;
   }
 }
+
+
+/* Incremental history loading stays inside the messages pane. */
+.messageHistoryLoad {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 8px 8px;
+}
+.messageHistoryLoad .detailsButton {
+  min-height: 34px;
+  padding: 7px 14px;
+  font-size: 12px;
+  border-radius: 18px;
+}
