@@ -169,10 +169,9 @@ export default function WhatsAppSettingsPage() {
 
   async function saveBusinessPhoto() {
     if (!account || !selectedPhoto || photoSaving) return;
-    if (!window.confirm(
-      `Alterar a foto pública do perfil comercial do WhatsApp ${account.display_phone_number || ""}? Essa foto será vista pelos clientes.`
-    )) return;
 
+    // The clearly labeled action button is the user's explicit instruction.
+    // Show server responses inline instead of blocking browser dialogs.
     setPhotoSaving(true);
     setPhotoSuccess(false);
     setPhotoMessage(null);
@@ -507,7 +506,7 @@ export default function WhatsAppSettingsPage() {
               </div>
             </div>
             <p className="settingsHint">
-              Aceita JPG ou PNG de até 4 MB. Ao escolher, você pode ajustar zoom, posição e recorte antes de enviar. Apenas administradores podem alterar a foto.
+              Aceita JPG ou PNG de até 4 MB. Ajuste zoom, posição e recorte antes de enviar. Ao clicar em Atualizar foto comercial, a foto pública será alterada diretamente no WhatsApp, sem confirmação adicional. Apenas administradores podem alterar a foto.
               A Meta pode demorar alguns minutos para atualizar o WhatsApp dos clientes.
             </p>
             {memberRole === "AGENT" && (
