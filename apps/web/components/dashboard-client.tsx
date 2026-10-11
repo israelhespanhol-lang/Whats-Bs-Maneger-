@@ -459,31 +459,74 @@ export default function DashboardClient() {
 
   const loadMessages = useCallback(
     async (conversationId: string, options?: { background?: boolean }) => {
-      const background = options?.background ?? false;
-
-      if (!background) {
-        setMessagesLoading(true);
-      }
-
+      const cached = messageCacheRef.current.get(conversationId);
+      if (!options?.background && !cached) setMessagesLoading(true);
       const { data: rows, error: messageError } = await supabase
         .from("messages")
         .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at")
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: false })
-        .limit(500);
-
+        .limit(MESSAGE_PAGE_SIZE);
       if (messageError) {
-        setError(messageError.message);
-      } else if (selectedIdRef.current === conversationId) {
-        setMessages([...(rows ?? [])].reverse() as Message[]);
+        if (selectedIdRef.current === conversationId) setError(messageError.message);
+      } else {
+        const fetched = [...(rows ?? [])].reverse() as Message[];
+        const pending = (messageCacheRef.current.get(conversationId)?.items ?? [])
+          .filter((message) => message.optimistic);
+        const merged = sortMessages([
+          ...fetched,
+          ...pending.filter((item) => !fetched.some((row) => row.id === item.id))
+        ]);
+        const hasMore = fetched.length === MESSAGE_PAGE_SIZE;
+        writeMessageCache(conversationId, merged, hasMore);
+        if (selectedIdRef.current === conversationId) {
+          setMessages((current) => {
+            const live = current.filter((item) => !merged.some((server) => server.id === item.id));
+            const next = sortMessages([...merged, ...live]);
+            writeMessageCache(conversationId, next, hasMore);
+            return next;
+          });
+          setHasOlderMessages(hasMore);
+        }
       }
-
-      if (!background && selectedIdRef.current === conversationId) {
-        setMessagesLoading(false);
-      }
+      if (selectedIdRef.current === conversationId) setMessagesLoading(false);
     },
-    []
+    [writeMessageCache]
   );
+
+  const loadOlderMessages = useCallback(async () => {
+    const conversationId = selectedIdRef.current;
+    if (!conversationId || olderLoading || !hasOlderMessages) return;
+    const oldest = messageCacheRef.current.get(conversationId)?.items
+      .filter((message) => !message.optimistic)[0];
+    if (!oldest) return;
+    setOlderLoading(true);
+    shouldAutoScrollRef.current = false;
+    const { data, error: historyError } = await supabase
+      .from("messages")
+      .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at")
+      .eq("conversation_id", conversationId)
+      .lt("created_at", oldest.created_at)
+      .order("created_at", { ascending: false })
+      .limit(MESSAGE_PAGE_SIZE);
+    if (selectedIdRef.current === conversationId) {
+      if (historyError) setError(historyError.message);
+      else {
+        const older = [...(data ?? [])].reverse() as Message[];
+        const hasMore = older.length === MESSAGE_PAGE_SIZE;
+        setMessages((current) => {
+          const next = sortMessages([
+            ...older.filter((item) => !current.some((present) => present.id === item.id)),
+            ...current
+          ]);
+          writeMessageCache(conversationId, next, hasMore);
+          return next;
+        });
+        setHasOlderMessages(hasMore);
+      }
+    }
+    setOlderLoading(false);
+  }, [olderLoading, hasOlderMessages, writeMessageCache]);
 
   useEffect(() => {
     let active = true;
