@@ -761,14 +761,19 @@ export default function DashboardClient() {
   useEffect(() => {
     if (!selectedId) {
       setMessages([]);
+      setHasOlderMessages(false);
       return;
     }
 
     selectedIdRef.current = selectedId;
     shouldAutoScrollRef.current = true;
-    setMessages([]);
-    void loadMessages(selectedId);
-
+    const cached = messageCacheRef.current.get(selectedId);
+    setMessages(cached?.items ?? []);
+    setHasOlderMessages(cached?.hasMore ?? false);
+    setMessagesLoading(!cached);
+    if (!cached || Date.now() - cached.fetchedAt > 20_000) {
+      void loadMessages(selectedId, { background: Boolean(cached) });
+    }
 
     const channel = supabase
       .channel(`messages:${selectedId}`)
@@ -785,20 +790,20 @@ export default function DashboardClient() {
 
           if (payload.eventType === "INSERT") {
             const incoming = payload.new as Message;
-            setMessages((current) => upsertMessage(current, incoming));
+            patchSelectedMessages((current) => upsertMessage(current, incoming));
             return;
           }
 
           if (payload.eventType === "UPDATE") {
             const incoming = payload.new as Message;
-            setMessages((current) => upsertMessage(current, incoming));
+            patchSelectedMessages((current) => upsertMessage(current, incoming));
             return;
           }
 
           if (payload.eventType === "DELETE") {
             const removedId = (payload.old as { id?: string })?.id;
             if (removedId) {
-              setMessages((current) =>
+              patchSelectedMessages((current) =>
                 current.filter((message) => message.id !== removedId)
               );
             }
@@ -810,7 +815,7 @@ export default function DashboardClient() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [selectedId, loadMessages]);
+  }, [selectedId, loadMessages, patchSelectedMessages]);
 
   async function sendMessage() {
     if (!selected || !draft.trim() || sending) return;
@@ -1733,6 +1738,14 @@ export default function DashboardClient() {
                 shouldAutoScrollRef.current = distanceFromBottom < 140;
               }}
             >
+              {hasOlderMessages && !messageSearch.trim() && (
+                <div className="messageHistoryLoad">
+                  <button type="button" className="detailsButton"
+                    onClick={() => void loadOlderMessages()} disabled={olderLoading}>
+                    {olderLoading ? "Buscando histórico..." : "Carregar mensagens anteriores"}
+                  </button>
+                </div>
+              )}
               {messagesLoading && messages.length === 0 ? (
                 <div className="messageState">Carregando mensagens...</div>
               ) : displayedMessages.length === 0 ? (
