@@ -879,3 +879,129 @@
   opacity: .45;
   cursor: not-allowed;
 }
+
+
+/* Public WhatsApp business profile picture editor */
+.businessPhotoCard {
+  grid-column: 1 / -1;
+}
+.businessPhotoPublicLabel {
+  color: var(--accent-strong);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.businessPhotoEditor {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin: 18px 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+.businessPhotoPreview {
+  width: 118px;
+  height: 118px;
+  flex: 0 0 118px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface));
+  border: 3px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  display: grid;
+  place-items: center;
+  box-shadow: 0 10px 30px var(--shadow);
+}
+.businessPhotoPreview img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+.businessPhotoPreview > span {
+  color: var(--accent-strong);
+  font-weight: 800;
+  font-size: 30px;
+  letter-spacing: -.08em;
+}
+.businessPhotoEditorContent {
+  min-width: 0;
+  flex: 1;
+}
+.businessPhotoEditorContent > strong,
+.businessPhotoEditorContent > span {
+  display: block;
+}
+.businessPhotoEditorContent > strong {
+  font-size: 17px;
+  line-height: 1.35;
+}
+.businessPhotoEditorContent > span {
+  margin: 6px 0 15px;
+  font-size: 13px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.businessPhotoActions {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.businessPhotoActions .authPrimaryButton,
+.businessPhotoActions .detailsButton {
+  min-height: 43px;
+  width: auto;
+  margin: 0;
+  padding: 0 16px;
+  font-size: 13px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+}
+.businessPhotoFileInput {
+  display: none;
+}
+.businessPhotoActions button:disabled {
+  opacity: .56;
+  cursor: not-allowed;
+}
+.businessPhotoNotice {
+  padding: 13px 15px;
+  margin-top: 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.businessPhotoNotice.success {
+  color: var(--accent-strong);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: var(--accent-soft);
+}
+.businessPhotoNotice.error {
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, #ef8181 38%, var(--border));
+  background: color-mix(in srgb, #ef8181 9%, var(--surface));
+}
+@media (max-width: 640px) {
+  .businessPhotoCard {
+    grid-column: auto;
+  }
+  .businessPhotoEditor {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .businessPhotoActions {
+    width: 100%;
+    flex-direction: column;
+  }
+  .businessPhotoActions .authPrimaryButton,
+  .businessPhotoActions .detailsButton {
+    width: 100%;
+  }
+}
