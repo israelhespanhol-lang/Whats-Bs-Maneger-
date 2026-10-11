@@ -251,6 +251,7 @@ export default function BroadcastsClient() {
   const [optInConfirmed, setOptInConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sendingBroadcastId, setSendingBroadcastId] = useState<string | null>(null);
+  const [pendingBroadcastId, setPendingBroadcastId] = useState<string | null>(null);
   const [expandedBroadcastId, setExpandedBroadcastId] = useState<string | null>(null);
   const [detailsLoadingId, setDetailsLoadingId] = useState<string | null>(null);
   const [detailsByBroadcast, setDetailsByBroadcast] =
@@ -1314,15 +1315,11 @@ export default function BroadcastsClient() {
   }
 
   async function startBroadcast(broadcast: Broadcast) {
-    if (sendingBroadcastId) return;
+    // Only the explicit inline "Confirmar envio" button calls this function.
+    if (sendingBroadcastId || pendingBroadcastId !== broadcast.id ||
+        !["READY", "SENDING"].includes(broadcast.status)) return;
 
-    const estimated = Number(broadcast.estimated_cost_brl ?? 0);
-    const confirmed = window.confirm(
-      `Enviar agora ${broadcast.audience_count} mensagem(ns) pelo template aprovado?\n\nCusto estimado: ${money(estimated)}\n\nO envio só começa após esta confirmação.`
-    );
-
-    if (!confirmed) return;
-
+    setPendingBroadcastId(null);
     setSendingBroadcastId(broadcast.id);
     setMessage(null);
 
@@ -2375,13 +2372,19 @@ export default function BroadcastsClient() {
                       <button
                         className="sendBroadcastButton"
                         disabled={Boolean(sendingBroadcastId)}
-                        onClick={() => void startBroadcast(broadcast)}
+                        onClick={() =>
+                          setPendingBroadcastId((current) =>
+                            current === broadcast.id ? null : broadcast.id
+                          )
+                        }
                       >
                         {sendingBroadcastId === broadcast.id
                           ? "Enviando..."
-                          : broadcast.status === "SENDING"
-                            ? "Continuar envio"
-                            : "Iniciar envio"}
+                          : pendingBroadcastId === broadcast.id
+                            ? "Ocultar revisão"
+                            : broadcast.status === "SENDING"
+                              ? "Revisar retomada"
+                              : "Revisar envio"}
                       </button>
                     )}
                     {broadcast.status === "READY" && (
@@ -2417,6 +2420,37 @@ export default function BroadcastsClient() {
                     )}
                   </div>
                 </div>
+
+                {pendingBroadcastId === broadcast.id &&
+                  ["READY", "SENDING"].includes(broadcast.status) && (
+                    <div className="broadcastInlineConfirm" role="group" aria-label="Revisar e autorizar envio">
+                      <div className="broadcastInlineConfirmInfo">
+                        <strong>Revisar antes de enviar</strong>
+                        <span>
+                          {broadcast.audience_count} destinatário(s) · Custo estimado: {money(Number(broadcast.estimated_cost_brl ?? 0))}
+                        </span>
+                        <small>O envio de mensagens só começa ao clicar em Confirmar envio.</small>
+                      </div>
+                      <div className="broadcastInlineConfirmActions">
+                        <button
+                          type="button"
+                          className="broadcastInlineCancel"
+                          disabled={Boolean(sendingBroadcastId)}
+                          onClick={() => setPendingBroadcastId(null)}
+                        >
+                          Voltar
+                        </button>
+                        <button
+                          type="button"
+                          className="sendBroadcastButton"
+                          disabled={Boolean(sendingBroadcastId)}
+                          onClick={() => void startBroadcast(broadcast)}
+                        >
+                          Confirmar envio
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                 {expandedBroadcastId === broadcast.id && (
                   <div className="broadcastDetailsPanel">
