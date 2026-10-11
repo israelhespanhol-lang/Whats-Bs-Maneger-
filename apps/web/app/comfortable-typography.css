@@ -1065,3 +1065,128 @@
   font-size: 12px;
   border-radius: 18px;
 }
+
+
+/* Phase 2: composer tools are floating panels, never extra chat grid rows. */
+.appShell .flowLikeComposer {
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+}
+.appShell .chatUtilityPopover {
+  position: absolute;
+  left: 12px;
+  bottom: calc(100% + 8px);
+  z-index: 40;
+  width: min(470px, calc(100% - 24px));
+  max-height: min(440px, 70vh);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, .3);
+  overflow: hidden;
+}
+.appShell .chatUtilityPopover button {
+  width: auto;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text);
+}
+.appShell .chatUtilityHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 15px;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+}
+.appShell .chatUtilityHeader button {
+  width: 28px;
+  height: 28px;
+  background: var(--surface-soft);
+  font-size: 20px;
+}
+.appShell .chatUtilityContent {
+  padding: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+.appShell .chatUtilityHelp {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.appShell .chatNotesList, .appShell .chatQuickReplyList {
+  max-height: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  overflow-y: auto;
+}
+.appShell .chatInternalNote {
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-radius: 9px;
+  background: var(--surface-soft);
+}
+.appShell .chatInternalNote strong { color: var(--accent-strong); font-size: 11px; }
+.appShell .chatInternalNote p { margin: 5px 0 0; font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
+.appShell .chatUtilityPopover input, .appShell .chatUtilityPopover textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px 11px;
+  background: var(--surface-soft);
+  color: var(--text);
+  outline: none;
+  font-size: 13px;
+  resize: vertical;
+}
+.appShell .chatUtilityPopover textarea:focus, .appShell .chatUtilityPopover input:focus {
+  border-color: var(--accent);
+}
+.appShell .chatUtilityPopover .chatUtilityPrimary {
+  background: var(--accent);
+  color: #0a2119;
+  font-weight: 750;
+  min-height: 39px;
+  padding: 8px 12px;
+}
+.appShell .chatUtilityPopover .chatUtilityPrimary:disabled { opacity: .55; cursor: not-allowed; }
+.appShell .chatQuickReplyList button {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 47px;
+  padding: 10px;
+  background: var(--surface-soft);
+}
+.appShell .chatQuickReplyList button strong { font-size: 12px; }
+.appShell .chatQuickReplyList button span {
+  font-size: 12px;
+  max-width: 100%;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.appShell .chatQuickReplyCreate { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border); padding-top: 11px; }
+.appShell .chatQuickReplyCreate > strong { font-size: 12px; }
+.appShell .chatQuickReplyFields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.appShell .chatEmojiGrid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; padding: 12px; }
+.appShell .chatEmojiGrid button { font-size: 21px; padding: 5px 2px; border: 0; background: transparent; }
+@media (max-width: 650px) {
+  .appShell .chatUtilityPopover { max-height: min(410px, 60vh); }
+  .appShell .chatEmojiGrid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .appShell .chatQuickReplyFields { grid-template-columns: 1fr; }
+}
