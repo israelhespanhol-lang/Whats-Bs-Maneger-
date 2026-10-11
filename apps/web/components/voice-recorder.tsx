@@ -76,7 +76,7 @@ export default function VoiceRecorder({ disabled, onReady, onError }: Props) {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      recorderRef.current?.stop?.();
+      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
       stopTracks();
     };
   }, []);
@@ -92,7 +92,7 @@ export default function VoiceRecorder({ disabled, onReady, onError }: Props) {
       if (!mountedRef.current) { stream.getTracks().forEach((track) => track.stop()); return; }
       streamRef.current = stream;
       const mime = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg;codecs=opus"]
-        .find((format) => MediaRecorder.isTypeSupported(format));
+        .find((format) => typeof MediaRecorder.isTypeSupported === "function" && MediaRecorder.isTypeSupported(format));
       const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
       recorderRef.current = recorder;
       const chunks: Blob[] = [];
