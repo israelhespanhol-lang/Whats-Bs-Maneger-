@@ -14,6 +14,7 @@ export type SidebarSection =
   | "broadcasts"
   | "templates"
   | "reports"
+  | "team"
   | "settings";
 
 type Props = {
@@ -67,6 +68,7 @@ const groups: Array<{
     label: "Gestão",
     items: [
       { id: "reports", label: "Relatórios", href: "/reports", icon: "⌁" },
+      { id: "team", label: "Equipe e filas", href: "/team", icon: "♙" },
       { id: "settings", label: "Configurações", href: "/settings", icon: "⚙" }
     ]
   }
