@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ThemeToggle from "../../../components/theme-toggle";
 import BrandLogo from "../../../components/brand-logo";
+import BusinessPhotoEditor from "../../../components/business-photo-editor";
 import { supabase } from "../../../lib/supabase";
 
 type Account = {
@@ -25,6 +26,7 @@ export default function WhatsAppSettingsPage() {
   const [memberRole, setMemberRole] = useState<"OWNER" | "ADMIN" | "AGENT" | null>(null);
   const [remotePhotoUrl, setRemotePhotoUrl] = useState<string | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
+  const [photoDraft, setPhotoDraft] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [photoSaving, setPhotoSaving] = useState(false);
@@ -143,16 +145,14 @@ export default function WhatsAppSettingsPage() {
     setPhotoSuccess(false);
 
     if (!["image/jpeg", "image/png"].includes(file.type)) {
-      setSelectedPhoto(null);
       setPhotoMessage("Selecione uma imagem JPG ou PNG.");
       return;
     }
     if (file.size > 4 * 1024 * 1024 || file.size < 4) {
-      setSelectedPhoto(null);
       setPhotoMessage("Escolha uma foto de até 4 MB.");
       return;
     }
-    setSelectedPhoto(file);
+    setPhotoDraft(file);
   }
 
   async function readPhotoBase64(file: File) {
@@ -483,6 +483,7 @@ export default function WhatsAppSettingsPage() {
                     aria-label="Selecionar foto comercial"
                     onChange={(event) => {
                       choosePhoto(event.target.files?.[0]);
+                      event.target.value = "";
                     }}
                     disabled={photoSaving || !account || account.status !== "CONNECTED" || memberRole === "AGENT"}
                   />
@@ -506,7 +507,7 @@ export default function WhatsAppSettingsPage() {
               </div>
             </div>
             <p className="settingsHint">
-              Aceita JPG ou PNG de até 4 MB. Apenas administradores podem alterar a foto.
+              Aceita JPG ou PNG de até 4 MB. Ao escolher, você pode ajustar zoom, posição e recorte antes de enviar. Apenas administradores podem alterar a foto.
               A Meta pode demorar alguns minutos para atualizar o WhatsApp dos clientes.
             </p>
             {memberRole === "AGENT" && (
@@ -553,6 +554,19 @@ export default function WhatsAppSettingsPage() {
 
         {message && <div className="settingsMessage">{message}</div>}
       </div>
+
+      {photoDraft && (
+        <BusinessPhotoEditor
+          file={photoDraft}
+          onCancel={() => setPhotoDraft(null)}
+          onConfirm={(cropped) => {
+            setSelectedPhoto(cropped);
+            setPhotoDraft(null);
+            setPhotoMessage(null);
+            setPhotoSuccess(false);
+          }}
+        />
+      )}
     </main>
   );
 }
