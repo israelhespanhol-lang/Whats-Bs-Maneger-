@@ -32,7 +32,16 @@ Deno.serve(async (request: Request) => {
 
   const url = Deno.env.get("SUPABASE_URL");
   const anon = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
-  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const legacyServiceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const secretKeys = Deno.env.get("SUPABASE_SECRET_KEYS");
+  let serviceRole = legacyServiceRole;
+  if (secretKeys) {
+    try {
+      serviceRole = JSON.parse(secretKeys).default || legacyServiceRole;
+    } catch {
+      // Keep legacy key if SUPABASE_SECRET_KEYS is unavailable or malformed.
+    }
+  }
   if (!url || !anon || !serviceRole) return respond({ error: "O gerenciamento da equipe não está configurado no servidor." }, 503);
 
   let body: RequestBody;
