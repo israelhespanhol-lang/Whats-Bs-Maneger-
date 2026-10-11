@@ -3858,3 +3858,68 @@
   color: #7e909d !important;
   font-size: 8px !important;
 }
+
+
+/* Inline confirmation replaces disruptive browser dialogs for manual sends. */
+.broadcastInlineConfirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 15px 17px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+.broadcastInlineConfirmInfo {
+  min-width: 0;
+  flex: 1 1 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.broadcastInlineConfirmInfo > strong {
+  color: var(--text);
+  font-size: 15px;
+}
+.broadcastInlineConfirmInfo > span {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.broadcastInlineConfirmInfo > small {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.broadcastInlineConfirmActions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.broadcastInlineConfirmActions button {
+  min-height: 40px;
+  padding: 9px 15px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.broadcastInlineCancel {
+  background: var(--surface);
+  color: var(--text);
+}
+.broadcastInlineConfirmActions button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+@media (max-width: 640px) {
+  .broadcastInlineConfirmActions,
+  .broadcastInlineConfirmActions button {
+    flex: 1 1 auto;
+  }
+}
