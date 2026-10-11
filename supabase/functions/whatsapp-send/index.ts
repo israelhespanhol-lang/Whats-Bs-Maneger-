@@ -174,6 +174,20 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  // Claim a free chat atomically. Prevent two agents from replying at the
+  // same time to a customer who already has an assigned attendant.
+  const { data: hasOwnership, error: ownershipError } = await client
+    .rpc("claim_conversation_for_reply", { target_conversation: conversationId });
+  if (ownershipError) {
+    return json({ error: "Não foi possível validar o responsável pelo atendimento.", code: "ASSIGNEE_CHECK_FAILED" }, 503);
+  }
+  if (hasOwnership !== true) {
+    return json({
+      error: "Esta conversa está atribuída a outro atendente. Solicite a transferência antes de responder.",
+      code: "ASSIGNED_TO_OTHER"
+    }, 409);
+  }
+
   const recipient = contact.phone_e164.replace(/^\+/, "");
   const messagesEndpoint =
     `https://graph.facebook.com/${graphVersion}/${account.phone_number_id}/messages`;
