@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 
 type AttachmentInput = {
-  kind: "image" | "document";
+  kind: "image" | "document" | "audio";
   name: string;
   mimeType: string;
   dataBase64: string;
@@ -20,6 +20,7 @@ type SendBody = {
   conversationId?: string;
   text?: string;
   attachment?: AttachmentInput;
+  replyToMessageId?: string;
 };
 
 function json(data: unknown, status = 200) {
@@ -84,6 +85,7 @@ Deno.serve(async (req: Request) => {
   const conversationId = body.conversationId?.trim();
   const text = body.text?.trim();
   const attachment = body.attachment;
+  const replyToMessageId = body.replyToMessageId?.trim() || null;
 
   if (!conversationId || (!text && !attachment)) {
     return json(
@@ -97,7 +99,7 @@ Deno.serve(async (req: Request) => {
   }
 
   if (attachment) {
-    if (!["image", "document"].includes(attachment.kind)) {
+    if (!["image", "document", "audio"].includes(attachment.kind)) {
       return json({ error: "Unsupported attachment kind" }, 400);
     }
 
@@ -115,13 +117,18 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Only PDF documents are supported" }, 400);
     }
 
+    if (attachment.kind === "audio" &&
+        !["audio/mpeg", "audio/mp4", "audio/aac", "audio/amr", "audio/ogg"].includes(attachment.mimeType.split(";")[0])) {
+      return json({ error: "Formato de áudio inválido. Envie MP3, AAC, M4A ou OGG/Opus." }, 400);
+    }
+
     if (!attachment.name || !attachment.dataBase64) {
       return json({ error: "Attachment data is incomplete" }, 400);
     }
 
     const estimatedBytes = Math.floor((attachment.dataBase64.length * 3) / 4);
-    if (estimatedBytes > 5 * 1024 * 1024) {
-      return json({ error: "Attachment exceeds 5 MB" }, 413);
+    if (estimatedBytes > (attachment.kind === "audio" ? 12 : 5) * 1024 * 1024) {
+      return json({ error: "Arquivo excede o limite permitido de tamanho." }, 413);
     }
 
     if ((attachment.caption?.length ?? 0) > 1024) {
@@ -188,6 +195,20 @@ Deno.serve(async (req: Request) => {
     }, 409);
   }
 
+  let repliedMessageId: string | null = null;
+  let repliedWhatsappId: string | null = null;
+  if (replyToMessageId) {
+    const { data: quoted, error: replyError } = await client.from("messages")
+      .select("id,whatsapp_message_id")
+      .eq("conversation_id", conversationId)
+      .eq("id", replyToMessageId).maybeSingle();
+    if (replyError || !quoted?.whatsapp_message_id) {
+      return json({ error: "A mensagem citada não está disponível para responder no WhatsApp." }, 422);
+    }
+    repliedMessageId = quoted.id;
+    repliedWhatsappId = quoted.whatsapp_message_id;
+  }
+
   const recipient = contact.phone_e164.replace(/^\+/, "");
   const messagesEndpoint =
     `https://graph.facebook.com/${graphVersion}/${account.phone_number_id}/messages`;
@@ -237,7 +258,9 @@ Deno.serve(async (req: Request) => {
     uploadedMediaId = uploadBody.id;
     messageType = attachment.kind;
     storedBody =
-      attachment.caption?.trim() || `📎 ${attachment.name}`;
+      attachment.kind === "audio"
+        ? "🎤 Áudio"
+        : attachment.caption?.trim() || `📎 ${attachment.name}`;
 
     if (attachment.kind === "image") {
       metaPayload = {
@@ -251,6 +274,14 @@ Deno.serve(async (req: Request) => {
             ? { caption: attachment.caption.trim() }
             : {})
         }
+      };
+    } else if (attachment.kind === "audio") {
+      metaPayload = {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: recipient,
+        type: "audio",
+        audio: { id: uploadedMediaId }
       };
     } else {
       metaPayload = {
@@ -278,6 +309,10 @@ Deno.serve(async (req: Request) => {
         body: text
       }
     };
+  }
+
+  if (repliedWhatsappId) {
+    metaPayload.context = { message_id: repliedWhatsappId };
   }
 
   const metaResponse = await fetch(messagesEndpoint, {
@@ -316,6 +351,7 @@ Deno.serve(async (req: Request) => {
       direction: "OUTBOUND",
       message_type: messageType,
       body: storedBody,
+      reply_to_message_id: repliedMessageId,
       status: "PENDING",
       raw_payload: {
         provider: "meta",
@@ -334,7 +370,7 @@ Deno.serve(async (req: Request) => {
       created_at: now
     })
     .select(
-      "id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at"
+      "id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url"
     )
     .single();
 
@@ -343,7 +379,7 @@ Deno.serve(async (req: Request) => {
       const { data: existing } = await client
         .from("messages")
         .select(
-          "id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at"
+          "id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url"
         )
         .eq("organization_id", conversation.organization_id)
         .eq("whatsapp_message_id", whatsappMessageId)
