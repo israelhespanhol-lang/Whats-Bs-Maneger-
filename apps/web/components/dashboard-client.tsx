@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import BrandLogo from "./brand-logo";
 import AppSidebar from "./app-sidebar";
+import MessageMedia from "./message-media";
+import VoiceRecorder from "./voice-recorder";
 import { supabase } from "../lib/supabase";
 import { recordClientMetric } from "../lib/performance-tracking";
 import {
@@ -81,6 +83,8 @@ type Message = {
   delivered_at: string | null;
   read_at: string | null;
   optimistic?: boolean;
+  reply_to_message_id?: string | null;
+  media_url?: string | null;
 };
 
 const MESSAGE_PAGE_SIZE = 80;
@@ -284,6 +288,11 @@ export default function DashboardClient() {
   const organizationIdRef = useRef<string | null>(cachedShell?.membership?.organization_id ?? null);
   const inboxRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [draft, setDraft] = useState("");
+  const [quotedMessage, setQuotedMessage] = useState<Message | null>(null);
+  const [recordedAudio, setRecordedAudio] = useState<File | null>(null);
+  const [recordedPreviewUrl, setRecordedPreviewUrl] = useState<string | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const messageInputRef = useRef<HTMLInputElement | null>(null);
   const [composerTool, setComposerTool] = useState<ComposerTool>(null);
   const [internalNotes, setInternalNotes] = useState<InternalNote[]>([]);
   const [assignmentEvents, setAssignmentEvents] = useState<AssignmentEvent[]>([]);
@@ -449,6 +458,11 @@ export default function DashboardClient() {
     ).slice(0, 12);
   }, [draft, quickReplies]);
 
+  const byMessageId = useMemo(() =>
+    new Map(messages.map((message) => [message.id, message])),
+    [messages]
+  );
+
   const displayedMessages = useMemo(() => {
     const term = messageSearch.trim().toLowerCase();
     if (!messageSearchOpen || !term) return messages;
@@ -531,7 +545,7 @@ export default function DashboardClient() {
       if (!options?.background && !cached) setMessagesLoading(true);
       const { data: rows, error: messageError } = await supabase
         .from("messages")
-        .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at")
+        .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url")
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: false })
         .limit(MESSAGE_PAGE_SIZE);
@@ -573,7 +587,7 @@ export default function DashboardClient() {
     shouldAutoScrollRef.current = false;
     const { data, error: historyError } = await supabase
       .from("messages")
-      .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at")
+      .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url")
       .eq("conversation_id", conversationId)
       .lt("created_at", oldest.created_at)
       .order("created_at", { ascending: false })
@@ -844,6 +858,9 @@ export default function DashboardClient() {
 
     selectedIdRef.current = selectedId;
     shouldAutoScrollRef.current = true;
+    setQuotedMessage(null);
+    setRecordedAudio(null);
+    setComposerTool(null);
     const cached = messageCacheRef.current.get(selectedId);
     setMessages(cached?.items ?? []);
     setHasOlderMessages(cached?.hasMore ?? false);
