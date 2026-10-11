@@ -141,9 +141,11 @@ Deno.serve(async (request: Request) => {
     let emailSent = false;
 
     if (!targetId) {
-      const appUrl = Deno.env.get("MAIS_CHAT_APP_URL") || "https://whats-bs-manager.vercel.app";
+      // Use the canonical production domain and onboarding path, regardless
+      // of deployment preview or a stale localhost environment setting.
+      const redirectTo = "https://whats-bs-manager.vercel.app/convite";
       const { data: invite, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
-        redirectTo: appUrl + "/",
+        redirectTo,
         data: name ? { name } : undefined
       });
       if (inviteError || !invite.user) {
