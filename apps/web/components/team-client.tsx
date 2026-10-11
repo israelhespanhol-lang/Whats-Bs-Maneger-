@@ -86,7 +86,7 @@ export default function TeamClient() {
   const departmentByMember=new Map(assignments.map(x=>[x.member_id,x.department_id]));
   const currentOnline=presence.filter(p=>p.status==="AVAILABLE"&&Date.now()-new Date(p.last_seen_at).getTime()<120_000).length;
 
-  async function saveOperation(work:()=>Promise<{error?:{message:string}|null}>,success:string) {
+  async function saveOperation(work:()=>PromiseLike<{error?:{message:string}|null}>,success:string) {
     if(busy)return;
     setBusy(true);setError(null);setFeedback(null);
     try{
