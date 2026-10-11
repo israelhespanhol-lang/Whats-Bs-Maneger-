@@ -2279,6 +2279,7 @@ export default function DashboardClient() {
                     ⌕ <span>{uploading ? "Enviando..." : "Anexos"}</span>
                   </button>
                   <VoiceRecorder
+                    key={selected.id}
                     disabled={!connected || sending || uploading || Boolean(recordedAudio) || windowText === "Janela encerrada"}
                     onReady={(file) => {
                       setRecordedAudio(file);
