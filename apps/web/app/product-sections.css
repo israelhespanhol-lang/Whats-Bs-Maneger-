@@ -4048,3 +4048,56 @@
   border-color: color-mix(in srgb, #ef7380 45%, var(--border));
   background: color-mix(in srgb, #e76271 10%, var(--surface));
 }
+
+
+/* Etapa 3 — presença no menu e painel operacional por setores. */
+.teamPresenceSwitcher{display:grid;gap:6px;margin:7px 8px 11px;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-soft);}
+.teamPresenceSwitcher label{color:var(--text-muted);font-size:11px;font-weight:700}
+.teamPresenceSwitcher select{background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);width:100%;padding:7px 8px;min-width:0;min-height:36px;font-size:12px}
+.teamPresenceSwitcher small{font-size:11px;color:#f0a2a9}
+.teamBoardStats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.teamBoardStats article{padding:16px;display:grid;gap:5px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+.teamBoardStats span{font-size:12px;color:var(--text-muted);font-weight:600}
+.teamBoardStats strong{font-size:29px;font-weight:800;color:var(--text)}
+.teamBoardStats .teamBoardTime{font-size:20px}
+.teamBoardStats small{font-size:11px;color:var(--text-muted)}
+.teamBoardTwoColumns{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.teamBoardCard{padding:18px!important;display:flex;flex-direction:column;gap:12px;min-width:0}
+.teamBoardCard h2{font-size:18px;line-height:1.2;margin:0}
+.teamBoardCard p{font-size:13px;line-height:1.6;color:var(--text-muted);margin:0}
+.teamBoardCard>small{font-size:11px;line-height:1.5;color:var(--text-muted)}
+.teamBoardTitle{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.teamBoardTitle>div{display:grid;gap:5px}
+.teamBoardOn,.teamBoardOff{font-size:11px;border-radius:15px;padding:6px 10px;font-weight:800;white-space:nowrap}
+.teamBoardOn{color:#45d9a4;background:rgba(34,186,117,.14)}
+.teamBoardOff{color:var(--text-muted);background:var(--surface-soft)}
+.teamBoardCard label{display:grid;gap:6px;font-size:12px;font-weight:700;color:var(--text)}
+.teamBoardCard input,.teamBoardCard select{width:100%;min-height:40px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;color:var(--text);background:var(--surface);font-size:13px;min-width:0}
+.teamBoardCard button{border:1px solid var(--border);border-radius:9px;min-height:40px;padding:8px 14px;cursor:pointer;font-size:13px;font-weight:700;color:var(--text);background:var(--surface-soft)}
+.teamBoardCard button:disabled{opacity:.55;cursor:wait}
+.teamBoardCard button.primaryAction{background:var(--accent);color:#082219;border-color:transparent}
+.teamBoardCard button.teamBoardStop{border-color:rgba(243,113,117,.5);color:#f3afb5}
+.teamBoardRoutingActions{display:flex;justify-content:flex-end}
+.teamBoardNewDepartment{display:flex;gap:8px}
+.teamBoardNewDepartment input{flex:1 1 auto}
+.teamBoardNewDepartment button{flex:0 0 auto}
+.teamBoardDepartments{display:grid;gap:7px;max-height:185px;overflow-y:auto}
+.teamBoardDepartments>div{display:flex;justify-content:space-between;gap:8px;padding:10px;border:1px solid var(--border);border-radius:9px;font-size:13px;color:var(--text)}
+.teamBoardDepartments span{font-size:12px;color:var(--text-muted)}
+.teamBoardMembers{display:grid;gap:7px}
+.teamBoardMember{display:flex;align-items:center;gap:13px;padding:13px;border:1px solid var(--border);border-radius:11px}
+.teamBoardAvatar{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;flex:0 0 auto;background:var(--surface-soft);font-size:13px;font-weight:800;color:var(--text)}
+.teamBoardMemberInfo{display:grid;gap:4px;flex:1;min-width:0}
+.teamBoardMemberInfo strong{font-size:14px;overflow-wrap:anywhere}
+.teamBoardMemberInfo span,.teamBoardMemberInfo small{font-size:11px;color:var(--text-muted)}
+.teamBoardMemberInfo small.teamBoardAvailable{color:#4bd3a2}
+.teamBoardMember label{width:min(210px,33%);flex:0 1 auto}
+.teamBoardMemberCount{display:grid;text-align:center;gap:2px;min-width:76px}
+.teamBoardMemberCount strong{font-size:19px}
+.teamBoardMemberCount small{font-size:11px;color:var(--text-muted)}
+.teamBoardRefresh{min-height:32px!important;font-size:12px!important}
+.teamBoardError,.teamBoardInfo{padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:15px;font-size:13px}
+.teamBoardError{color:#f1a6ad;border-color:rgba(245,111,125,.35)}
+.teamBoardInfo{color:#67d6aa;border-color:rgba(45,200,125,.35)}
+@media(max-width:980px){.teamBoardStats{grid-template-columns:repeat(2,minmax(0,1fr))}.teamBoardTwoColumns{grid-template-columns:1fr}}
+@media(max-width:600px){.teamBoardMember{flex-wrap:wrap}.teamBoardMember label{width:100%}.teamBoardMemberCount{margin-left:auto}.teamBoardStats{gap:8px}.teamBoardStats article{padding:12px}.teamBoardStats strong{font-size:23px}.teamBoardNewDepartment{flex-wrap:wrap}}

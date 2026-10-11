@@ -295,6 +295,15 @@ Deno.serve(async (req: Request) => {
 
         inserted += 1;
 
+        // Routing is opt-in and applies only to NEW inbound messages.
+        // Never sends an outbound message; leaves queue unchanged if nobody is available.
+        const { error: routeError } = await admin.rpc("route_inbound_conversation", {
+          p_conversation_id: conversation.id
+        });
+        if (routeError) {
+          errors.push({ stage: "team_routing", message: routeError.message });
+        }
+
         const windowExpiresAt = new Date(
           new Date(receivedAt).getTime() + 24 * 60 * 60 * 1000
         ).toISOString();
