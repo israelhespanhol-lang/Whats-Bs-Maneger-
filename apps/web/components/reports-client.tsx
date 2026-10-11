@@ -5,6 +5,13 @@ import SectionLayout from "./section-layout";
 import { supabase } from "../lib/supabase";
 import { useMaisChatContext } from "../lib/use-mais-chat-context";
 
+type PerfEvent = {
+  operation: "INBOX_LOAD" | "MESSAGE_LOAD" | "SEND_MESSAGE";
+  duration_ms: number;
+  cache_hit: boolean;
+  created_at: string;
+};
+
 type Contact = { status: string; created_at: string };
 type Conversation = { status: string; unread_count: number; created_at: string };
 type Message = {
@@ -29,6 +36,7 @@ export default function ReportsClient() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [performanceEvents, setPerformanceEvents] = useState<PerfEvent[]>([]);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,6 +80,43 @@ export default function ReportsClient() {
 
     void load();
   }, [organizationId]);
+
+  useEffect(() => {
+    if (!organizationId || ctx.membership?.role === "AGENT") return;
+    let alive = true;
+    async function loadPerformance() {
+      const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+      const { data, error } = await supabase.from("client_performance_events")
+        .select("operation,duration_ms,cache_hit,created_at")
+        .eq("organization_id", organizationId)
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (alive && !error) setPerformanceEvents((data ?? []) as PerfEvent[]);
+    }
+    void loadPerformance();
+    return () => { alive = false; };
+  }, [organizationId, ctx.membership?.role]);
+
+  const performanceSummary = useMemo(() => {
+    const summarise = (type: PerfEvent["operation"]) => {
+      const values = performanceEvents
+        .filter((item) => item.operation === type)
+        .map((item) => item.duration_ms)
+        .sort((a,b) => a-b);
+      if (!values.length) return { count: 0, median: null as number | null, p95: null as number | null };
+      return {
+        count: values.length,
+        median: values[Math.floor((values.length-1)*0.5)],
+        p95: values[Math.floor((values.length-1)*0.95)]
+      };
+    };
+    return {
+      inbox: summarise("INBOX_LOAD"),
+      messages: summarise("MESSAGE_LOAD"),
+      send: summarise("SEND_MESSAGE")
+    };
+  }, [performanceEvents]);
 
   const metrics = useMemo(() => {
     const outbound = messages.filter((item) => item.direction === "OUTBOUND");
@@ -186,6 +231,33 @@ export default function ReportsClient() {
               <small>{metrics.read} mensagens lidas</small>
             </article>
           </div>
+
+          {ctx.membership?.role !== "AGENT" && (
+            <section className="dataCard reportCard">
+              <div className="reportCardHeader">
+                <div>
+                  <p className="eyebrow">OBSERVABILIDADE · ÚLTIMAS 24 HORAS</p>
+                  <h2>Velocidade real do Mais Chat</h2>
+                  <p className="sectionDescription">Amostragem discreta de 25% das operações, sem coletar conteúdo ou telefone dos clientes.</p>
+                </div>
+              </div>
+              <div className="metricGrid">
+                {([
+                  ["Abertura do inbox", performanceSummary.inbox],
+                  ["Carregamento de mensagens", performanceSummary.messages],
+                  ["Tempo de envio à API", performanceSummary.send]
+                ] as const).map(([label, stats]) => (
+                  <article className="metricCard" key={label}>
+                    <span>{label}</span>
+                    <strong>{stats.median === null ? "—" : `${stats.median} ms`}</strong>
+                    <small>{stats.p95 === null
+                      ? "Aguardando amostras"
+                      : `Mediana · P95: ${stats.p95} ms · ${stats.count} amostra(s)`}</small>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
 
           <div className="reportGrid">
             <section className="dataCard reportCard">
