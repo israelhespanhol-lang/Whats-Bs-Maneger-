@@ -1005,3 +1005,48 @@
     width: 100%;
   }
 }
+
+/* Chat search is an additional compact grid row, not the messages' flex area.
+   Keep the composer pinned to the bottom when search is open. */
+.appShell .chat.chatWithSearch {
+  grid-template-rows: minmax(80px, 94px) 48px minmax(0, 1fr) minmax(126px, 136px);
+}
+
+.appShell .chat.chatWithSearch > .messageSearchBar {
+  box-sizing: border-box;
+  grid-row: 2;
+  min-height: 0;
+  height: 48px;
+  padding: 6px 14px;
+  overflow: hidden;
+}
+
+.appShell .chat.chatWithSearch > .messages {
+  grid-row: 3;
+  min-height: 0;
+  height: 100%;
+}
+
+.appShell .chat.chatWithSearch > .flowLikeComposer {
+  grid-row: 4;
+  min-height: 0;
+}
+
+@media (max-height: 740px) {
+  .appShell .chat.chatWithSearch {
+    grid-template-rows: minmax(68px, 82px) 46px minmax(0, 1fr) 118px;
+  }
+  .appShell .chat.chatWithSearch > .messageSearchBar {
+    height: 46px;
+  }
+}
+
+@media (max-width: 680px) {
+  .appShell .chat.chatWithSearch > .messageSearchBar {
+    padding-inline: 10px;
+  }
+  .appShell .chat.chatWithSearch > .messageSearchBar input {
+    width: 100%;
+    height: 34px;
+  }
+}
