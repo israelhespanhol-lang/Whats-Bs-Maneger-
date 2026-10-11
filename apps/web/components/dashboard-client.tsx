@@ -1478,7 +1478,7 @@ export default function DashboardClient() {
         </footer>
       </section>
 
-      <section className="chat">
+      <section className={messageSearchOpen && selected && contact ? "chat chatWithSearch" : "chat"}>
         {selected && contact ? (
           <>
             <header className="chatHeader flowLikeChatHeader">
