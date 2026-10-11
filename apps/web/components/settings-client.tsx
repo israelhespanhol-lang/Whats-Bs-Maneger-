@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabase";
 import { useMaisChatContext } from "../lib/use-mais-chat-context";
 
 type Role = "OWNER" | "ADMIN" | "AGENT";
+type InviteFeedback = { kind: "success" | "info" | "error"; text: string };
 type Member = {
   id: string;
   userId: string;
@@ -26,11 +27,30 @@ function one<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? value[0] ?? null : value;
 }
 
+// HTTP status errors from Supabase Functions keep the JSON error in context,
+// instead of in data. Read it to show the useful server message.
+async function teamErrorMessage(data: { error?: string } | null, error: unknown, fallback: string) {
+  if (data?.error) return data.error;
+  if (error && typeof error === "object" && "context" in error) {
+    const response = (error as { context?: Response }).context;
+    if (response && typeof response.clone === "function") {
+      try {
+        const payload = await response.clone().json();
+        if (typeof payload?.error === "string") return payload.error;
+      } catch {
+        // Keep a generic error if the server did not return JSON.
+      }
+    }
+  }
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function SettingsClient() {
   const ctx = useMaisChatContext();
   const organizationId = ctx.membership?.organization_id ?? null;
   const [members, setMembers] = useState<Member[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [inviteFeedback, setInviteFeedback] = useState<InviteFeedback | null>(null);
   const [working, setWorking] = useState(false);
   const [teamLoading, setTeamLoading] = useState(false);
   const [name, setName] = useState("");
@@ -38,6 +58,9 @@ export default function SettingsClient() {
   const [inviteRole, setInviteRole] = useState<"ADMIN" | "AGENT">("AGENT");
   const [removeId, setRemoveId] = useState<string | null>(null);
   const canManage = ctx.membership?.role === "OWNER" || ctx.membership?.role === "ADMIN";
+  const memberWithEmail = email.trim()
+    ? members.find((member) => member.email.trim().toLowerCase() === email.trim().toLowerCase())
+    : null;
 
   const loadMembers = useCallback(async () => {
     if (!organizationId) return;
@@ -57,26 +80,55 @@ export default function SettingsClient() {
 
   async function invite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!organizationId || !canManage || working) return;
+    if (!organizationId || !canManage || working || teamLoading) return;
+
+    if (memberWithEmail) {
+      setInviteFeedback({
+        kind: "info",
+        text: memberWithEmail.status === "PENDING"
+          ? "Este endereço já possui um convite pendente. Não foi enviado outro e-mail."
+          : "Este endereço já faz parte da equipe. Nenhum novo e-mail foi enviado. Para testar o convite, utilize um endereço que ainda não esteja cadastrado no Mais Chat."
+      });
+      return;
+    }
+
     setWorking(true);
+    setInviteFeedback(null);
     setMessage(null);
-    const { data, error } = await supabase.functions.invoke("team-members", {
-      body: {
-        action: "invite", organizationId,
-        email: email.trim(), name: name.trim(),
-        role: ctx.membership?.role === "OWNER" ? inviteRole : "AGENT"
+    try {
+      const { data, error } = await supabase.functions.invoke("team-members", {
+        body: {
+          action: "invite", organizationId,
+          email: email.trim(), name: name.trim(),
+          role: ctx.membership?.role === "OWNER" ? inviteRole : "AGENT"
+        }
+      });
+      if (error || !data?.ok) {
+        const detail = await teamErrorMessage(data, error, "Não foi possível processar o convite.");
+        setInviteFeedback({ kind: "error", text: detail });
+        return;
       }
-    });
-    if (error || !data?.ok) {
-      setMessage(data?.error || error?.message || "Não foi possível convidar este e-mail.");
-    } else {
-      setMessage(data.warning || data.message || "Convite realizado.");
+      setInviteFeedback(data.emailed
+        ? {
+            kind: data.warning ? "info" : "success",
+            text: data.warning || "Convite solicitado ao serviço de e-mail. Verifique a caixa de entrada e o spam do destinatário."
+          }
+        : {
+            kind: "info",
+            text: "Essa pessoa já tinha uma conta no Mais Chat. O acesso à equipe foi associado à conta existente, sem envio de um novo e-mail. Ela pode entrar usando seu login atual."
+          });
       setEmail("");
       setName("");
       setInviteRole("AGENT");
       await loadMembers();
+    } catch (cause) {
+      setInviteFeedback({
+        kind: "error",
+        text: cause instanceof Error ? cause.message : "Erro inesperado ao criar o convite."
+      });
+    } finally {
+      setWorking(false);
     }
-    setWorking(false);
   }
 
   async function manageMember(member: Member, action: "changeRole" | "remove", role?: Role) {
@@ -185,7 +237,10 @@ export default function SettingsClient() {
                 </label>
                 <label>
                   E-mail
-                  <input type="email" value={email} onChange={(event) => setEmail(event.target.value)}
+                  <input type="email" value={email} onChange={(event) => {
+                      setEmail(event.target.value);
+                      setInviteFeedback(null);
+                    }}
                     placeholder="atendente@empresa.com" required disabled={working} />
                 </label>
                 <label>
@@ -197,11 +252,23 @@ export default function SettingsClient() {
                     {ctx.membership?.role === "OWNER" && <option value="ADMIN">Administrador</option>}
                   </select>
                 </label>
-                <button className="primaryAction" type="submit" disabled={working || !email.trim()}>
+                <button className="primaryAction" type="submit"
+                  disabled={working || teamLoading || !email.trim() || Boolean(memberWithEmail)}>
                   {working ? "Aguarde..." : "Enviar convite"}
                 </button>
               </div>
-              <small>Usuários novos recebem convite por e-mail. Quem já possui login é associado à equipe sem trocar a senha.</small>
+              {memberWithEmail && (
+                <p className="teamInviteAlert teamInviteAlertInfo" role="status">
+                  {memberWithEmail.status === "PENDING"
+                    ? "Este e-mail já tem convite pendente. Não será enviado outro."
+                    : "Este usuário já faz parte da equipe. Convite duplicado não gera e-mail."}
+                </p>
+              )}
+              {inviteFeedback && (
+                <p className={`teamInviteAlert teamInviteAlert${inviteFeedback.kind === "success" ? "Success" : inviteFeedback.kind === "info" ? "Info" : "Error"}`}
+                  role="status">{inviteFeedback.text}</p>
+              )}
+              <small>Convites para novos usuários são enviados por e-mail. Contas existentes podem ser adicionadas sem novo e-mail; membros atuais não recebem convites duplicados.</small>
             </form>
           )}
 
