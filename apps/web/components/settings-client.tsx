@@ -1,18 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import SectionLayout from "./section-layout";
 import { supabase } from "../lib/supabase";
 import { useMaisChatContext } from "../lib/use-mais-chat-context";
 
+type Role = "OWNER" | "ADMIN" | "AGENT";
 type Member = {
   id: string;
-  role: "OWNER" | "ADMIN" | "AGENT";
-  users:
-    | { name: string; email: string }
-    | { name: string; email: string }[]
-    | null;
+  userId: string;
+  name: string;
+  email: string;
+  role: Role;
+  status: "PENDING" | "ACTIVE";
+  invitedAt: string | null;
+};
+const roleNames: Record<Role, string> = {
+  OWNER: "Proprietário",
+  ADMIN: "Administrador",
+  AGENT: "Atendente"
 };
 
 function one<T>(value: T | T[] | null): T | null {
@@ -24,27 +31,70 @@ export default function SettingsClient() {
   const organizationId = ctx.membership?.organization_id ?? null;
   const [members, setMembers] = useState<Member[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [working, setWorking] = useState(false);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"ADMIN" | "AGENT">("AGENT");
+  const [removeId, setRemoveId] = useState<string | null>(null);
+  const canManage = ctx.membership?.role === "OWNER" || ctx.membership?.role === "ADMIN";
 
-  useEffect(() => {
+  const loadMembers = useCallback(async () => {
     if (!organizationId) return;
-
-    async function loadMembers() {
-      const { data, error } = await supabase
-        .from("organization_members")
-        .select("id,role,users(name,email)")
-        .eq("organization_id", organizationId)
-        .order("created_at", { ascending: true });
-
-      if (error) {
-        setMessage(error.message);
-        return;
-      }
-
-      setMembers((data ?? []) as Member[]);
+    setTeamLoading(true);
+    const { data, error } = await supabase.functions.invoke("team-members", {
+      body: { action: "list", organizationId }
+    });
+    if (error || !data?.ok) {
+      setMessage(data?.error || error?.message || "Não foi possível consultar a equipe.");
+    } else {
+      setMembers((data.members || []) as Member[]);
     }
-
-    void loadMembers();
+    setTeamLoading(false);
   }, [organizationId]);
+
+  useEffect(() => { void loadMembers(); }, [loadMembers]);
+
+  async function invite(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!organizationId || !canManage || working) return;
+    setWorking(true);
+    setMessage(null);
+    const { data, error } = await supabase.functions.invoke("team-members", {
+      body: {
+        action: "invite", organizationId,
+        email: email.trim(), name: name.trim(),
+        role: ctx.membership?.role === "OWNER" ? inviteRole : "AGENT"
+      }
+    });
+    if (error || !data?.ok) {
+      setMessage(data?.error || error?.message || "Não foi possível convidar este e-mail.");
+    } else {
+      setMessage(data.warning || data.message || "Convite realizado.");
+      setEmail("");
+      setName("");
+      setInviteRole("AGENT");
+      await loadMembers();
+    }
+    setWorking(false);
+  }
+
+  async function manageMember(member: Member, action: "changeRole" | "remove", role?: Role) {
+    if (!organizationId || !canManage || working) return;
+    setWorking(true);
+    setMessage(null);
+    const { data, error } = await supabase.functions.invoke("team-members", {
+      body: { action, organizationId, memberId: member.id, role }
+    });
+    if (error || !data?.ok) {
+      setMessage(data?.error || error?.message || "Não foi possível alterar o integrante.");
+    } else {
+      setMessage(data.message || "Equipe atualizada.");
+      await loadMembers();
+    }
+    setRemoveId(null);
+    setWorking(false);
+  }
 
   const organization = one(ctx.membership?.organizations ?? null);
   const connected = ctx.account?.status === "CONNECTED";
@@ -93,7 +143,7 @@ export default function SettingsClient() {
           <div>
             <span>Sessão</span>
             <h3>{ctx.userName}</h3>
-            <p>Nível de acesso: {ctx.membership?.role}</p>
+            <p>Nível de acesso: {roleNames[ctx.membership?.role || "AGENT"]}</p>
           </div>
           <span className="statePill state-ready">Seguro</span>
         </article>
@@ -116,31 +166,93 @@ export default function SettingsClient() {
               <p className="eyebrow">EQUIPE</p>
               <h2>Usuários e permissões</h2>
             </div>
-            <span>{members.length} usuário{members.length === 1 ? "" : "s"}</span>
+            <span>{members.length} integrante{members.length === 1 ? "" : "s"}</span>
           </div>
 
-          <div className="memberList">
+          <p className="teamHelpText">Cada integrante tem seu próprio login e atende pelo WhatsApp da empresa.</p>
+
+          {canManage && (
+            <form className="teamInviteForm" onSubmit={(event) => void invite(event)}>
+              <div className="teamInviteTitle">
+                <strong>Convidar integrante</strong>
+                <span>Envie um convite por e-mail para acessar o Mais Chat.</span>
+              </div>
+              <div className="teamInviteFields">
+                <label>
+                  Nome (opcional)
+                  <input value={name} onChange={(event) => setName(event.target.value)}
+                    placeholder="Nome do atendente" maxLength={100} disabled={working} />
+                </label>
+                <label>
+                  E-mail
+                  <input type="email" value={email} onChange={(event) => setEmail(event.target.value)}
+                    placeholder="atendente@empresa.com" required disabled={working} />
+                </label>
+                <label>
+                  Permissão
+                  <select value={ctx.membership?.role === "OWNER" ? inviteRole : "AGENT"}
+                    onChange={(event) => setInviteRole(event.target.value as "AGENT" | "ADMIN")}
+                    disabled={working || ctx.membership?.role !== "OWNER"}>
+                    <option value="AGENT">Atendente</option>
+                    {ctx.membership?.role === "OWNER" && <option value="ADMIN">Administrador</option>}
+                  </select>
+                </label>
+                <button className="primaryAction" type="submit" disabled={working || !email.trim()}>
+                  {working ? "Aguarde..." : "Enviar convite"}
+                </button>
+              </div>
+              <small>Usuários novos recebem convite por e-mail. Quem já possui login é associado à equipe sem trocar a senha.</small>
+            </form>
+          )}
+
+          {teamLoading && <p className="teamHelpText">Carregando integrantes...</p>}
+          <div className="memberList teamMemberList">
             {members.map((member) => {
-              const user = one(member.users);
+              const mine = member.userId === ctx.userId;
+              const removable = canManage && !mine && member.role !== "OWNER" &&
+                (ctx.membership?.role === "OWNER" || member.role === "AGENT");
               return (
-                <div className="memberRow" key={member.id}>
-                  <div className="miniAvatar">
-                    {(user?.name || "U").slice(0, 2).toUpperCase()}
+                <div className="memberRow teamMemberRow" key={member.id}>
+                  <div className="miniAvatar">{(member.name || "U").slice(0, 2).toUpperCase()}</div>
+                  <div className="teamMemberIdentity">
+                    <strong>{member.name} {mine && <small>(você)</small>}</strong>
+                    <span>{member.email}</span>
+                    <span className={member.status === "PENDING" ? "teamPending" : "teamActive"}>
+                      {member.status === "PENDING" ? "Convite pendente" : "Acesso ativo"}
+                    </span>
                   </div>
-                  <div>
-                    <strong>{user?.name || "Usuário"}</strong>
-                    <span>{user?.email || "Sem e-mail"}</span>
+                  <div className="teamMemberActions">
+                    {ctx.membership?.role === "OWNER" && !mine && member.role !== "OWNER" ? (
+                      <select value={member.role} disabled={working}
+                        aria-label={"Função de " + member.name}
+                        onChange={(event) => void manageMember(member, "changeRole", event.target.value as Role)}>
+                        <option value="AGENT">Atendente</option>
+                        <option value="ADMIN">Administrador</option>
+                      </select>
+                    ) : (
+                      <span className="memberRole">{roleNames[member.role]}</span>
+                    )}
+                    {removable && (removeId === member.id ? (
+                      <div className="teamRevokeActions">
+                        <button type="button" disabled={working} onClick={() => setRemoveId(null)}>Voltar</button>
+                        <button className="teamRevokeConfirm" type="button" disabled={working}
+                          onClick={() => void manageMember(member, "remove")}>Revogar acesso</button>
+                      </div>
+                    ) : (
+                      <button type="button" className="teamRemoveButton" disabled={working}
+                        onClick={() => setRemoveId(member.id)}>Remover</button>
+                    ))}
                   </div>
-                  <span className="memberRole">{member.role}</span>
                 </div>
               );
             })}
           </div>
+          <p className="teamHelpText">Remover um usuário revoga o acesso, mas preserva o histórico das conversas.</p>
 
           {members.length === 0 && (
             <div className="sectionEmpty">
               <strong>Nenhum usuário adicional.</strong>
-              <p>Os administradores poderão gerenciar a equipe por aqui.</p>
+              <p>Utilize o formulário acima para convidar integrantes.</p>
             </div>
           )}
         </section>
@@ -195,7 +307,7 @@ export default function SettingsClient() {
         </Link>
       </section>
 
-      {message && <div className="sectionNotice">{message}</div>}
+      {message && <div className="sectionNotice" role="status">{message}</div>}
     </SectionLayout>
   );
 }
