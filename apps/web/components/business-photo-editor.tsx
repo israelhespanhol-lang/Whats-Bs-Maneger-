@@ -201,7 +201,7 @@ export default function BusinessPhotoEditor({ file, onCancel, onConfirm }: Props
         <div className={styles.editorArea}>
           <div
             ref={viewportRef}
-            className={`${styles.viewport} ${file.type === "image/png" ? styles.transparentViewport : styles.whiteViewport}`}
+            className={file.type === "image/png" ? styles.viewport : `${styles.viewport} ${styles.whiteViewport}`}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={endDrag}
