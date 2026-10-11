@@ -29,5 +29,8 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
         run: npm run build -w @whats-manager/web
 
+      - name: Synthetic inbox performance smoke test
+        run: node scripts/benchmark-inbox.mjs
+
       - name: Build API
         run: npm run build -w @whats-manager/api
