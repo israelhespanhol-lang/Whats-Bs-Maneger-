@@ -458,6 +458,55 @@ export default function DashboardClient() {
     ).slice(0, 12);
   }, [draft, quickReplies]);
 
+  const getDraftKey = useCallback((conversationId: string) => {
+    const owner = membership?.id || "unknown";
+    return `mais-chat:draft:${owner}:${conversationId}`;
+  }, [membership?.id]);
+
+  const updateDraft = useCallback((value: string) => {
+    setDraft(value);
+    const currentConversation = selectedIdRef.current;
+    if (!currentConversation) return;
+    try {
+      const key = getDraftKey(currentConversation);
+      if (value.trim()) sessionStorage.setItem(key, value);
+      else sessionStorage.removeItem(key);
+    } catch {
+      // Private browsing may disable sessionStorage; keep the in-memory draft.
+    }
+  }, [getDraftKey]);
+
+  useEffect(() => {
+    if (!selectedId) { setDraft(""); return; }
+    try {
+      setDraft(sessionStorage.getItem(getDraftKey(selectedId)) || "");
+    } catch {
+      setDraft("");
+    }
+  }, [selectedId, getDraftKey]);
+
+  useEffect(() => {
+    if (!recordedAudio) { setRecordedPreviewUrl(null); return; }
+    const url = URL.createObjectURL(recordedAudio);
+    setRecordedPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [recordedAudio]);
+
+  useEffect(() => {
+    const handleShortcuts = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      if (event.key === "Escape") {
+        setQuotedMessage(null);
+        setComposerTool(null);
+      }
+    };
+    window.addEventListener("keydown", handleShortcuts);
+    return () => window.removeEventListener("keydown", handleShortcuts);
+  }, []);
+
   const byMessageId = useMemo(() =>
     new Map(messages.map((message) => [message.id, message])),
     [messages]
@@ -1533,6 +1582,7 @@ export default function DashboardClient() {
           <label className="search">
             <span>⌕</span>
             <input
+              ref={searchInputRef}
               value={conversationSearch}
               onChange={(event) => setConversationSearch(event.target.value)}
               placeholder="Buscar contatos/mensagens..."
@@ -2058,7 +2108,7 @@ export default function DashboardClient() {
                 <div className="chatUtilityPopover" role="region" aria-label="Ferramentas de atendimento">
                   <div className="chatUtilityHeader">
                     <strong>{composerTool === "notes" ? "Notas internas" : composerTool === "emoji" ? "Emojis" : "Respostas rápidas da equipe"}</strong>
-                    <button type="button" aria-label="Fechar ferramentas" onClick={() => { setComposerTool(null); if (draft.startsWith("/")) setDraft(""); }}>×</button>
+                    <button type="button" aria-label="Fechar ferramentas" onClick={() => { setComposerTool(null); if (draft.startsWith("/")) updateDraft(""); }}>×</button>
                   </div>
                   {composerTool === "notes" ? (
                     <div className="chatUtilityContent">
@@ -2082,7 +2132,7 @@ export default function DashboardClient() {
                   ) : composerTool === "emoji" ? (
                     <div className="chatEmojiGrid">
                       {["😀","😊","😉","😍","🙏","👍","✅","🎉","✨","❤️","📌","📅","💬","👋","💚","☀️"].map((emoji) => (
-                        <button type="button" key={emoji} onClick={() => { setDraft((text) => text + emoji); setComposerTool(null); }}
+                        <button type="button" key={emoji} onClick={() => { updateDraft(draft + emoji); setComposerTool(null); }}
                           aria-label={`Inserir ${emoji}`}>{emoji}</button>
                       ))}
                     </div>
@@ -2092,7 +2142,7 @@ export default function DashboardClient() {
                       <div className="chatQuickReplyList">
                         {suggestedQuickReplies.length === 0 ? <small>Nenhuma resposta encontrada. Cadastre uma abaixo.</small> :
                           suggestedQuickReplies.map((reply) => (
-                            <button type="button" key={reply.id} onClick={() => { setDraft(reply.body); setComposerTool(null); }}>
+                            <button type="button" key={reply.id} onClick={() => { updateDraft(reply.body); setComposerTool(null); }}>
                               <strong>/{reply.shortcut} — {reply.title}</strong>
                               <span>{reply.body}</span>
                             </button>
@@ -2198,13 +2248,14 @@ export default function DashboardClient() {
                   ☺
                 </button>
                 <input
+                ref={messageInputRef}
                 value={draft}
-                onChange={(event) => setDraft(event.target.value)}
+                onChange={(event) => updateDraft(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
                     if (draft.startsWith("/") && suggestedQuickReplies.length) {
-                      setDraft(suggestedQuickReplies[0].body);
+                      updateDraft(suggestedQuickReplies[0].body);
                       setComposerTool(null);
                     } else {
                       void sendMessage();
