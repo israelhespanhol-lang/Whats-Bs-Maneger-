@@ -51,6 +51,7 @@ export default function SettingsClient() {
   const [members, setMembers] = useState<Member[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [inviteFeedback, setInviteFeedback] = useState<InviteFeedback | null>(null);
+  const [membersError, setMembersError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
   const [teamLoading, setTeamLoading] = useState(false);
   const [name, setName] = useState("");
@@ -69,9 +70,10 @@ export default function SettingsClient() {
       body: { action: "list", organizationId }
     });
     if (error || !data?.ok) {
-      setMessage(data?.error || error?.message || "Não foi possível consultar a equipe.");
+      setMembersError(await teamErrorMessage(data, error, "Não foi possível consultar a equipe."));
     } else {
       setMembers((data.members || []) as Member[]);
+      setMembersError(null);
     }
     setTeamLoading(false);
   }, [organizationId]);
@@ -139,7 +141,7 @@ export default function SettingsClient() {
       body: { action, organizationId, memberId: member.id, role }
     });
     if (error || !data?.ok) {
-      setMessage(data?.error || error?.message || "Não foi possível alterar o integrante.");
+      setMessage(await teamErrorMessage(data, error, "Não foi possível alterar o integrante."));
     } else {
       setMessage(data.message || "Equipe atualizada.");
       await loadMembers();
@@ -273,6 +275,11 @@ export default function SettingsClient() {
           )}
 
           {teamLoading && <p className="teamHelpText">Carregando integrantes...</p>}
+          {membersError && (
+            <p className="teamInviteAlert teamInviteAlertError" role="alert">
+              Não foi possível carregar a equipe: {membersError}
+            </p>
+          )}
           <div className="memberList teamMemberList">
             {members.map((member) => {
               const mine = member.userId === ctx.userId;
