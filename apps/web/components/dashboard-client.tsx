@@ -1128,12 +1128,15 @@ export default function DashboardClient() {
     setError(null);
 
     const text = draft.trim();
+    const sentConversationId = selected.id;
+    const reply = quotedMessage;
     const optimisticId = `optimistic-${crypto.randomUUID()}`;
     const optimisticMessage: Message = {
       id: optimisticId,
       direction: "OUTBOUND",
       message_type: "text",
       body: text,
+      reply_to_message_id: reply?.id ?? null,
       status: "PENDING",
       created_at: new Date().toISOString(),
       sent_at: null,
@@ -1143,7 +1146,8 @@ export default function DashboardClient() {
     };
 
     shouldAutoScrollRef.current = true;
-    setDraft("");
+    updateDraft("");
+    setQuotedMessage(null);
     setMessages((current) => upsertMessage(current, optimisticMessage));
 
     const startedSend = performance.now();
@@ -1151,8 +1155,9 @@ export default function DashboardClient() {
       "whatsapp-send",
       {
         body: {
-          conversationId: selected.id,
-          text
+          conversationId: sentConversationId,
+          text,
+          replyToMessageId: reply?.id
         }
       }
     );
@@ -1166,6 +1171,10 @@ export default function DashboardClient() {
             : message
         )
       );
+      if (selectedIdRef.current === sentConversationId) {
+        updateDraft(text);
+        setQuotedMessage(reply);
+      }
       setError(await describeSendError(data, sendError,
         "Não foi possível enviar. Verifique a conexão do WhatsApp e a janela de atendimento."
       ));
@@ -1398,31 +1407,36 @@ export default function DashboardClient() {
     }
   }
 
-  async function sendAttachment(file: File) {
-    if (!selected || !connected || uploading || sending) return;
+  async function sendAttachment(file: File): Promise<boolean> {
+    if (!selected || !connected || uploading || sending) return false;
 
     const windowState = windowRemaining(
       selected.customer_service_window_expires_at
     );
     if (windowState === "Janela encerrada") {
       setError("A janela de atendimento está encerrada. Use um template aprovado.");
-      return;
+      return false;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setError("O anexo deve ter no máximo 5 MB.");
-      return;
-    }
-
-    const isImage = file.type.startsWith("image/");
+    const isImage = ["image/jpeg", "image/png"].includes(file.type);
     const isPdf = file.type === "application/pdf";
-    if (!isImage && !isPdf) {
-      setError("Por enquanto, envie imagens ou arquivos PDF.");
-      return;
+    const isAudio = ["audio/mpeg","audio/mp4","audio/aac","audio/amr","audio/ogg"].includes(file.type);
+    if (!isImage && !isPdf && !isAudio) {
+      setError("Envie imagens JPG/PNG, PDF ou áudio MP3/M4A/AAC/OGG.");
+      return false;
+    }
+    const maxSize = isAudio ? 12 : 5;
+    if (file.size > maxSize * 1024 * 1024) {
+      setError(`O anexo deve ter no máximo ${maxSize} MB.`);
+      return false;
     }
 
     setUploading(true);
     setError(null);
+
+    const sentConversationId = selected.id;
+    const reply = quotedMessage;
+    const caption = isAudio ? "" : draft.trim();
 
     try {
       const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -1435,13 +1449,13 @@ export default function DashboardClient() {
       const dataBase64 = dataUrl.split(",")[1];
       if (!dataBase64) throw new Error("Arquivo inválido.");
 
-      const caption = draft.trim();
       const optimisticId = `optimistic-${crypto.randomUUID()}`;
       const optimisticMessage: Message = {
         id: optimisticId,
         direction: "OUTBOUND",
-        message_type: isImage ? "image" : "document",
-        body: caption || `📎 ${file.name}`,
+        message_type: isImage ? "image" : isAudio ? "audio" : "document",
+        body: isAudio ? "🎤 Áudio" : caption || `📎 ${file.name}`,
+        reply_to_message_id: reply?.id ?? null,
         status: "PENDING",
         created_at: new Date().toISOString(),
         sent_at: null,
@@ -1451,16 +1465,18 @@ export default function DashboardClient() {
       };
 
       shouldAutoScrollRef.current = true;
-      setDraft("");
+      if (!isAudio) updateDraft("");
+      setQuotedMessage(null);
       setMessages((current) => upsertMessage(current, optimisticMessage));
 
       const { data, error: sendError } = await supabase.functions.invoke(
         "whatsapp-send",
         {
           body: {
-            conversationId: selected.id,
+            conversationId: sentConversationId,
+            replyToMessageId: reply?.id,
             attachment: {
-              kind: isImage ? "image" : "document",
+              kind: isImage ? "image" : isAudio ? "audio" : "document",
               name: file.name,
               mimeType: file.type,
               dataBase64,
@@ -1478,6 +1494,10 @@ export default function DashboardClient() {
               : message
           )
         );
+        if (selectedIdRef.current === sentConversationId) {
+          if (!isAudio) updateDraft(caption);
+          setQuotedMessage(reply);
+        }
         throw new Error(await describeSendError(data, sendError, "Não foi possível enviar o anexo."));
       }
 
@@ -1488,12 +1508,14 @@ export default function DashboardClient() {
           persisted
         )
       );
+      return true;
     } catch (attachmentError) {
       setError(
         attachmentError instanceof Error
           ? attachmentError.message
           : "Não foi possível enviar o anexo."
       );
+      return false;
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
