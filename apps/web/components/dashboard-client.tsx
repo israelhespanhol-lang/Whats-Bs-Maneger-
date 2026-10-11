@@ -721,33 +721,32 @@ export default function DashboardClient() {
           const changed = payload.new as Partial<Conversation> & { id?: string };
           if (!changed.id) return;
 
-          let known = false;
-          setConversations((current) => {
-            const index = current.findIndex((item) => item.id === changed.id);
-            if (index === -1) return current;
-
-            known = true;
-            const next = [...current];
-            next[index] = {
-              ...next[index],
-              assigned_member_id:
-                changed.assigned_member_id ?? next[index].assigned_member_id,
-              status: changed.status ?? next[index].status,
-              unread_count:
-                changed.unread_count ?? next[index].unread_count,
-              last_message_at:
-                changed.last_message_at ?? next[index].last_message_at,
-              customer_service_window_expires_at:
-                changed.customer_service_window_expires_at ??
-                next[index].customer_service_window_expires_at
-            };
-
-            return sortConversations(next);
-          });
-
-          if (!known || payload.eventType === "INSERT") {
-            void loadConversations(membership.organization_id);
+          const known = conversationsRef.current.some((item) => item.id === changed.id);
+          if (!known) {
+            if (inboxRefreshTimerRef.current) clearTimeout(inboxRefreshTimerRef.current);
+            inboxRefreshTimerRef.current = setTimeout(() => {
+              void loadConversations(membership.organization_id);
+              inboxRefreshTimerRef.current = null;
+            }, 350);
+            return;
           }
+          setConversations((current) => sortConversations(current.map((item) => {
+            if (item.id !== changed.id) return item;
+            return {
+              ...item,
+              assigned_member_id: changed.assigned_member_id === undefined ? item.assigned_member_id : changed.assigned_member_id,
+              campaign_id: changed.campaign_id === undefined ? item.campaign_id : changed.campaign_id,
+              crm_stage_id: changed.crm_stage_id === undefined ? item.crm_stage_id : changed.crm_stage_id,
+              status: changed.status ?? item.status,
+              unread_count: changed.unread_count ?? item.unread_count,
+              last_message_at: changed.last_message_at === undefined ? item.last_message_at : changed.last_message_at,
+              last_message_preview: changed.last_message_preview === undefined ? item.last_message_preview : changed.last_message_preview,
+              last_message_direction: changed.last_message_direction === undefined ? item.last_message_direction : changed.last_message_direction,
+              customer_service_window_expires_at: changed.customer_service_window_expires_at === undefined
+                ? item.customer_service_window_expires_at
+                : changed.customer_service_window_expires_at
+            };
+          })));
 
         }
       )
@@ -755,8 +754,16 @@ export default function DashboardClient() {
 
     return () => {
       void supabase.removeChannel(channel);
+      if (inboxRefreshTimerRef.current) {
+        clearTimeout(inboxRefreshTimerRef.current);
+        inboxRefreshTimerRef.current = null;
+      }
     };
   }, [membership, loadConversations]);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
 
   useEffect(() => {
     if (!selectedId) {
