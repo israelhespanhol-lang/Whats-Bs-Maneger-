@@ -40,6 +40,14 @@ type Conversation = {
   contacts: Contact | Contact[] | null;
 };
 
+type FollowupTask = {
+  id: string;
+  note: string;
+  due_at: string;
+  status: "PENDING" | "DONE" | "CANCELLED";
+  created_at: string;
+};
+
 type AssignmentEvent = {
   id: string;
   from_member_id: string | null;
@@ -277,6 +285,10 @@ export default function DashboardClient() {
   const [composerTool, setComposerTool] = useState<ComposerTool>(null);
   const [internalNotes, setInternalNotes] = useState<InternalNote[]>([]);
   const [assignmentEvents, setAssignmentEvents] = useState<AssignmentEvent[]>([]);
+  const [followupTasks, setFollowupTasks] = useState<FollowupTask[]>([]);
+  const [followupNote, setFollowupNote] = useState("");
+  const [followupDate, setFollowupDate] = useState("");
+  const [followupSaving, setFollowupSaving] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
@@ -892,6 +904,64 @@ export default function DashboardClient() {
       }, () => void loadQuickReplies()).subscribe();
     return () => { active = false; void supabase.removeChannel(channel); };
   }, [membership]);
+
+  useEffect(() => {
+    if (!selectedId) { setFollowupTasks([]); return; }
+    let live = true;
+    async function loadTasks() {
+      const { data } = await supabase.from("conversation_followup_tasks")
+        .select("id,note,due_at,status,created_at")
+        .eq("conversation_id", selectedId)
+        .order("due_at", { ascending: true }).limit(50);
+      if (live) setFollowupTasks((data ?? []) as FollowupTask[]);
+    }
+    void loadTasks();
+    const channel = supabase.channel(`followup-tasks:${selectedId}`)
+      .on("postgres_changes", {
+        event: "*", schema: "public", table: "conversation_followup_tasks",
+        filter: `conversation_id=eq.${selectedId}`
+      }, () => void loadTasks()).subscribe();
+    return () => { live = false; void supabase.removeChannel(channel); };
+  }, [selectedId]);
+
+  async function createFollowupTask() {
+    if (!selected || !membership || !followupDate || !followupNote.trim() || followupSaving) return;
+    const date = new Date(followupDate);
+    if (!Number.isFinite(date.getTime()) || date.getTime() <= Date.now()) {
+      setError("Escolha uma data e um horário futuros para o retorno.");
+      return;
+    }
+    setFollowupSaving(true);
+    const { data, error: taskError } = await supabase.from("conversation_followup_tasks")
+      .insert({
+        organization_id: membership.organization_id,
+        conversation_id: selected.id,
+        created_by_member_id: membership.id,
+        due_at: date.toISOString(),
+        note: followupNote.trim(),
+        status: "PENDING"
+      }).select("id,note,due_at,status,created_at").single();
+    if (taskError) setError("Não foi possível agendar o retorno: " + taskError.message);
+    else {
+      if (data && selectedIdRef.current === selected.id) {
+        setFollowupTasks((current) => [...current, data as FollowupTask].sort((a,b) => a.due_at.localeCompare(b.due_at)));
+      }
+      setFollowupNote("");
+      setFollowupDate("");
+    }
+    setFollowupSaving(false);
+  }
+
+  async function resolveFollowupTask(task: FollowupTask) {
+    if (task.status !== "PENDING") return;
+    const { error: taskError } = await supabase.from("conversation_followup_tasks")
+      .update({ status: "DONE", completed_at: new Date().toISOString() })
+      .eq("id", task.id);
+    if (taskError) setError(taskError.message);
+    else setFollowupTasks((current) => current.map((item) =>
+      item.id === task.id ? { ...item, status: "DONE" } : item
+    ));
+  }
 
   useEffect(() => {
     if (!selectedId) { setAssignmentEvents([]); return; }
@@ -2227,6 +2297,32 @@ export default function DashboardClient() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="infoBlock crmInspectorBlock">
+              <span className="sectionLabel">RETORNOS PROGRAMADOS</span>
+              <div className="chatFollowupPanel">
+                {followupTasks.filter((item) => item.status === "PENDING").length === 0 ? (
+                  <small>Nenhum retorno pendente.</small>
+                ) : followupTasks.filter((item) => item.status === "PENDING").map((item) => (
+                  <div className="chatFollowupItem" key={item.id}>
+                    <strong>{new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(item.due_at))}</strong>
+                    <p>{item.note}</p>
+                    <button type="button" onClick={() => void resolveFollowupTask(item)}>Marcar como concluído</button>
+                  </div>
+                ))}
+                <label>Data e horário
+                  <input type="datetime-local" value={followupDate} onChange={(event) => setFollowupDate(event.target.value)} />
+                </label>
+                <textarea placeholder="Motivo do retorno..." rows={2} maxLength={1500}
+                  value={followupNote} onChange={(event) => setFollowupNote(event.target.value)}/>
+                <button type="button" className="chatFollowupCreate"
+                  disabled={!followupNote.trim() || !followupDate || followupSaving}
+                  onClick={() => void createFollowupTask()}>
+                  {followupSaving ? "Salvando..." : "Agendar retorno"}
+                </button>
+                <small>Tarefa interna. Não dispara mensagem automática ao cliente.</small>
+              </div>
             </div>
 
             <div className="infoBlock crmInspectorBlock">
