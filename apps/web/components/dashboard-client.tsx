@@ -40,6 +40,21 @@ type Conversation = {
   contacts: Contact | Contact[] | null;
 };
 
+type InternalNote = {
+  id: string;
+  conversation_id: string;
+  body: string;
+  created_by_name: string;
+  created_at: string;
+};
+type QuickReply = {
+  id: string;
+  shortcut: string;
+  title: string;
+  body: string;
+};
+type ComposerTool = "notes" | "quick" | "emoji" | null;
+
 type Message = {
   id: string;
   direction: "INBOUND" | "OUTBOUND";
@@ -240,6 +255,15 @@ export default function DashboardClient() {
   const conversationsRef = useRef<Conversation[]>([]);
   const inboxRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [draft, setDraft] = useState("");
+  const [composerTool, setComposerTool] = useState<ComposerTool>(null);
+  const [internalNotes, setInternalNotes] = useState<InternalNote[]>([]);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
+  const [quickTitle, setQuickTitle] = useState("");
+  const [quickShortcut, setQuickShortcut] = useState("");
+  const [quickBody, setQuickBody] = useState("");
+  const [quickSaving, setQuickSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [conversationSearch, setConversationSearch] = useState("");
@@ -383,6 +407,13 @@ export default function DashboardClient() {
     }),
     [conversations, membership?.id]
   );
+
+  const suggestedQuickReplies = useMemo(() => {
+    const term = draft.startsWith("/") ? draft.slice(1).toLowerCase() : "";
+    return quickReplies.filter((item) => !term ||
+      item.shortcut.includes(term) || item.title.toLowerCase().includes(term)
+    ).slice(0, 12);
+  }, [draft, quickReplies]);
 
   const displayedMessages = useMemo(() => {
     const term = messageSearch.trim().toLowerCase();
@@ -823,6 +854,91 @@ export default function DashboardClient() {
       void supabase.removeChannel(channel);
     };
   }, [selectedId, loadMessages, patchSelectedMessages]);
+
+  useEffect(() => {
+    if (!membership) return;
+    let active = true;
+    async function loadQuickReplies() {
+      const { data } = await supabase.from("team_quick_replies")
+        .select("id,shortcut,title,body")
+        .eq("organization_id", membership!.organization_id).order("shortcut");
+      if (active) setQuickReplies((data ?? []) as QuickReply[]);
+    }
+    void loadQuickReplies();
+    const channel = supabase.channel(`quick-replies:${membership.organization_id}`)
+      .on("postgres_changes", {
+        event: "*", schema: "public", table: "team_quick_replies",
+        filter: `organization_id=eq.${membership.organization_id}`
+      }, () => void loadQuickReplies()).subscribe();
+    return () => { active = false; void supabase.removeChannel(channel); };
+  }, [membership]);
+
+  useEffect(() => {
+    if (!selectedId) { setInternalNotes([]); return; }
+    let active = true;
+    async function loadNotes() {
+      const { data } = await supabase.from("conversation_internal_notes")
+        .select("id,conversation_id,body,created_by_name,created_at")
+        .eq("conversation_id", selectedId).order("created_at", { ascending: false }).limit(50);
+      if (active) setInternalNotes((data ?? []) as InternalNote[]);
+    }
+    void loadNotes();
+    const channel = supabase.channel(`internal-notes:${selectedId}`)
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "conversation_internal_notes",
+        filter: `conversation_id=eq.${selectedId}`
+      }, () => void loadNotes()).subscribe();
+    return () => { active = false; void supabase.removeChannel(channel); };
+  }, [selectedId]);
+
+  async function saveInternalNote() {
+    if (!selected || !membership || !noteDraft.trim() || noteSaving) return;
+    setNoteSaving(true);
+    const noteText = noteDraft.trim();
+    const { data, error: noteError } = await supabase.from("conversation_internal_notes")
+      .insert({
+        organization_id: membership.organization_id,
+        conversation_id: selected.id,
+        created_by_member_id: membership.id,
+        created_by_name: userName,
+        body: noteText
+      }).select("id,conversation_id,body,created_by_name,created_at").single();
+    if (noteError) setError("Não foi possível salvar a nota: " + noteError.message);
+    else {
+      if (data && selectedIdRef.current === selected.id) {
+        setInternalNotes((current) => [data as InternalNote, ...current.filter((note) => note.id !== data.id)]);
+      }
+      setNoteDraft("");
+    }
+    setNoteSaving(false);
+  }
+
+  async function saveQuickReply() {
+    if (!membership || quickSaving || !quickTitle.trim() || !quickBody.trim()) return;
+    const shortcut = quickShortcut.trim().toLowerCase().replace(/^\//, "");
+    if (!/^[a-z0-9_-]{2,30}$/.test(shortcut)) {
+      setError("O atalho deve ter de 2 a 30 caracteres: letras minúsculas, números, - ou _.");
+      return;
+    }
+    setQuickSaving(true);
+    const { data, error: quickError } = await supabase.from("team_quick_replies")
+      .insert({
+        organization_id: membership.organization_id,
+        created_by_member_id: membership.id,
+        created_by_name: userName,
+        title: quickTitle.trim(),
+        shortcut,
+        body: quickBody.trim()
+      }).select("id,shortcut,title,body").single();
+    if (quickError) setError("Não foi possível salvar a resposta rápida: " + quickError.message);
+    else {
+      setQuickReplies((items) => [...items.filter((item) => item.id !== data.id), data as QuickReply].sort((a,b) => a.shortcut.localeCompare(b.shortcut)));
+      setQuickTitle("");
+      setQuickShortcut("");
+      setQuickBody("");
+    }
+    setQuickSaving(false);
+  }
 
   async function sendMessage() {
     if (!selected || !draft.trim() || sending) return;
@@ -1804,6 +1920,70 @@ export default function DashboardClient() {
             </div>
 
             <footer className={`composer flowLikeComposer ${connected ? "" : "composerLocked"}`}>
+              {(composerTool === "notes" || composerTool === "quick" || composerTool === "emoji" || draft.startsWith("/")) && (
+                <div className="chatUtilityPopover" role="region" aria-label="Ferramentas de atendimento">
+                  <div className="chatUtilityHeader">
+                    <strong>{composerTool === "notes" ? "Notas internas" : composerTool === "emoji" ? "Emojis" : "Respostas rápidas da equipe"}</strong>
+                    <button type="button" aria-label="Fechar ferramentas" onClick={() => { setComposerTool(null); if (draft.startsWith("/")) setDraft(""); }}>×</button>
+                  </div>
+                  {composerTool === "notes" ? (
+                    <div className="chatUtilityContent">
+                      <p className="chatUtilityHelp">Visível apenas para atendentes. Não é enviado ao cliente.</p>
+                      <div className="chatNotesList">
+                        {internalNotes.length === 0 ? <small>Nenhuma nota interna ainda.</small> :
+                          internalNotes.map((note) => (
+                            <div className="chatInternalNote" key={note.id}>
+                              <strong>{note.created_by_name} · {time(note.created_at)}</strong>
+                              <p>{note.body}</p>
+                            </div>
+                          ))}
+                      </div>
+                      <textarea value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)}
+                        placeholder="Escreva uma observação para a equipe..." maxLength={4000} rows={3}/>
+                      <button type="button" className="chatUtilityPrimary" disabled={!noteDraft.trim() || noteSaving}
+                        onClick={() => void saveInternalNote()}>
+                        {noteSaving ? "Salvando..." : "Salvar nota interna"}
+                      </button>
+                    </div>
+                  ) : composerTool === "emoji" ? (
+                    <div className="chatEmojiGrid">
+                      {["😀","😊","😉","😍","🙏","👍","✅","🎉","✨","❤️","📌","📅","💬","👋","💚","☀️"].map((emoji) => (
+                        <button type="button" key={emoji} onClick={() => { setDraft((text) => text + emoji); setComposerTool(null); }}
+                          aria-label={`Inserir ${emoji}`}>{emoji}</button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="chatUtilityContent">
+                      <p className="chatUtilityHelp">Selecione uma resposta ou digite /atalho no campo de mensagem. Nada é enviado automaticamente.</p>
+                      <div className="chatQuickReplyList">
+                        {suggestedQuickReplies.length === 0 ? <small>Nenhuma resposta encontrada. Cadastre uma abaixo.</small> :
+                          suggestedQuickReplies.map((reply) => (
+                            <button type="button" key={reply.id} onClick={() => { setDraft(reply.body); setComposerTool(null); }}>
+                              <strong>/{reply.shortcut} — {reply.title}</strong>
+                              <span>{reply.body}</span>
+                            </button>
+                          ))}
+                      </div>
+                      <div className="chatQuickReplyCreate">
+                        <strong>Nova resposta rápida compartilhada</strong>
+                        <div className="chatQuickReplyFields">
+                          <input value={quickTitle} onChange={(e) => setQuickTitle(e.target.value)}
+                            placeholder="Título" maxLength={100} aria-label="Título da resposta" />
+                          <input value={quickShortcut} onChange={(e) => setQuickShortcut(e.target.value)}
+                            placeholder="Atalho, ex.: saudacao" maxLength={30} aria-label="Atalho da resposta" />
+                        </div>
+                        <textarea value={quickBody} onChange={(e) => setQuickBody(e.target.value)}
+                          placeholder="Texto da resposta" rows={2} maxLength={4096}/>
+                        <button type="button" className="chatUtilityPrimary"
+                          disabled={quickSaving || !quickTitle.trim() || !quickShortcut.trim() || !quickBody.trim()}
+                          onClick={() => void saveQuickReply()}>
+                          {quickSaving ? "Salvando..." : "Criar resposta"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               <input
                 ref={fileInputRef}
                 className="attachmentInput"
@@ -1819,8 +1999,8 @@ export default function DashboardClient() {
                   <button
                     type="button"
                     className="composerToolButton"
-                    disabled
-                    title="Anotação interna ainda não está habilitada."
+                    title="Notas privadas para a equipe"
+                    onClick={() => setComposerTool((tool) => tool === "notes" ? null : "notes")}
                   >
                     ▤ <span>Anotação interna</span>
                   </button>
@@ -1851,8 +2031,8 @@ export default function DashboardClient() {
                   <button
                     type="button"
                     className="composerToolButton"
-                    disabled
-                    title="Atalhos rápidos serão adicionados em uma próxima etapa."
+                    title="Respostas rápidas compartilhadas"
+                    onClick={() => setComposerTool((tool) => tool === "quick" ? null : "quick")}
                   >
                     ⚡ <span>Atalhos</span>
                   </button>
@@ -1878,8 +2058,8 @@ export default function DashboardClient() {
                 <button
                   type="button"
                   className="emojiButton"
-                  disabled
-                  title="Emoji em breve"
+                  title="Inserir emoji"
+                  onClick={() => setComposerTool((tool) => tool === "emoji" ? null : "emoji")}
                 >
                   ☺
                 </button>
@@ -1889,7 +2069,12 @@ export default function DashboardClient() {
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
-                    void sendMessage();
+                    if (draft.startsWith("/") && suggestedQuickReplies.length) {
+                      setDraft(suggestedQuickReplies[0].body);
+                      setComposerTool(null);
+                    } else {
+                      void sendMessage();
+                    }
                   }
                 }}
                 placeholder={
