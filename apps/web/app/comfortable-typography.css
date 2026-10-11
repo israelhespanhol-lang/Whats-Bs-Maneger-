@@ -614,3 +614,268 @@
     height: 48px;
   }
 }
+
+
+/* Anchored channel selector, inspired by FlowChat's upward-opening menu. */
+.appShell .conversationListFooter {
+  position: relative;
+  z-index: 35;
+  overflow: visible;
+}
+
+.appShell .channelSelectorAnchor {
+  position: relative;
+  width: 100%;
+}
+
+.appShell .channelSelectorAnchor > .channelSelectorButton {
+  display: grid;
+  grid-template-columns: 22px 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  border-radius: 11px;
+  padding: 8px 10px;
+}
+
+.appShell .channelSelectorButton.active {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+  background: var(--surface-soft);
+}
+
+.appShell .channelSelectorSymbol {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
+  border-radius: 50%;
+  color: var(--accent-strong);
+  font-size: 12px;
+}
+
+.appShell .channelSelectorAnchor .channelSelectorButton > div {
+  min-width: 0;
+}
+
+.appShell .channelSelectorAnchor .channelSelectorButton strong {
+  font-size: 13px !important;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appShell .channelSelectorAnchor .channelSelectorButton span:not(.channelSelectorSymbol) {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.appShell .channelDropdown {
+  position: absolute;
+  bottom: calc(100% + 9px);
+  left: -2px;
+  right: -2px;
+  width: calc(100% + 4px);
+  max-height: min(415px, calc(100dvh - 124px));
+  z-index: 45;
+  padding: 7px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, #6c7e99);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-soft) 94%, #33405b);
+  color: var(--text);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, .45), 0 2px 10px rgba(0, 0, 0, .2);
+  display: flex;
+  flex-direction: column;
+  animation: channelDropdownAppear 120ms ease-out;
+  transform-origin: bottom center;
+}
+
+@keyframes channelDropdownAppear {
+  from { opacity: 0; transform: translateY(6px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .appShell .channelDropdown { animation: none; }
+}
+
+.appShell .channelDropdownAll,
+.appShell .channelDropdownItem {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.appShell .channelDropdownAll {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.appShell .channelDropdownAll.selected {
+  background: color-mix(in srgb, var(--surface) 30%, transparent);
+}
+
+.appShell .channelDropdownAll:hover,
+.appShell .channelDropdownItem:hover {
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+.appShell .channelDropdownStack {
+  width: 20px;
+  color: #b18bff;
+  font-size: 21px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+.appShell .channelDropdownCheck,
+.appShell .channelDropdownTick {
+  margin-left: auto;
+  color: var(--accent-strong);
+  font-size: 13px;
+}
+
+.appShell .channelDropdownList {
+  min-height: 0;
+  max-height: min(292px, 50dvh);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 3px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.appShell .channelDropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 9px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+}
+
+.appShell .channelDropdownItem.selected {
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.appShell .channelDropdownIcon {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 25px;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  color: var(--accent-strong);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.appShell .channelDropdownStatus {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: #8491a1;
+}
+
+.appShell .channelDropdownStatus.connected {
+  background: #31df7c;
+  box-shadow: 0 0 0 3px rgba(49, 223, 124, .08);
+}
+
+.appShell .channelDropdownDetails {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.appShell .channelDropdownDetails strong {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.appShell .channelDropdownDetails small {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.appShell .channelDropdownUnread {
+  flex: 0 0 auto;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #e94353;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.appShell .channelDropdownEmpty {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.appShell .channelDropdownActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 9px 2px 1px;
+  border-top: 1px solid var(--border);
+}
+
+.appShell .channelDropdownActions button {
+  width: auto;
+  min-height: 36px;
+  padding: 0 11px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.appShell .channelDropdownCancel {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.appShell .channelDropdownApply {
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.appShell .channelDropdownApply:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
