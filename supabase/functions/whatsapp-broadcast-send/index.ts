@@ -107,6 +107,16 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Broadcast not found or access denied" }, 404);
   }
 
+  // An agent can answer individual conversations, but must never start bulk sends.
+  const { data: senderMembership } = await admin.from("organization_members")
+    .select("role")
+    .eq("organization_id", broadcast.organization_id)
+    .eq("user_id", userData.user.id)
+    .maybeSingle();
+  if (!senderMembership || !["OWNER", "ADMIN"].includes(senderMembership.role)) {
+    return json({ error: "Somente administradores podem iniciar disparos em massa." }, 403);
+  }
+
   if (!broadcast.opt_in_confirmed) {
     return json(
       { error: "Opt-in confirmation is required for this broadcast." },
