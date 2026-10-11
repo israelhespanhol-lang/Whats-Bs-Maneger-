@@ -134,6 +134,10 @@ export function useMaisChatContext() {
       }
 
       const typedMember = member as MaisChatMembership;
+      // A successful login marks any email invitation as accepted.
+      void supabase.functions.invoke("team-members", {
+        body: { action: "activate" }
+      });
       setMembership(typedMember);
       primeMaisChatContextSnapshot({
         membership: typedMember,
