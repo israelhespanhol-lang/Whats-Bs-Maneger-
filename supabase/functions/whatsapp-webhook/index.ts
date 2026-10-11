@@ -254,6 +254,18 @@ Deno.serve(async (req: Request) => {
 
         if (existingMessage) continue;
 
+        const whatsappReplyId = message?.context?.id;
+        let parentId: string | null = null;
+        if (typeof whatsappReplyId === "string") {
+          const { data: parent } = await admin.from("messages")
+            .select("id")
+            .eq("organization_id", account.organization_id)
+            .eq("conversation_id", conversation.id)
+            .eq("whatsapp_message_id", whatsappReplyId)
+            .maybeSingle();
+          parentId = parent?.id ?? null;
+        }
+
         const { data: createdMessage, error: messageInsertError } = await admin
           .from("messages")
           .insert({
@@ -263,6 +275,7 @@ Deno.serve(async (req: Request) => {
             direction: "INBOUND",
             message_type: message.type ?? "unknown",
             body: bodyFromMessage(message),
+            reply_to_message_id: parentId,
             status: "DELIVERED",
             raw_payload: message,
             created_at: receivedAt

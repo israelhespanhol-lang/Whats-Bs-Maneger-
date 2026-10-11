@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import BrandLogo from "./brand-logo";
 import AppSidebar from "./app-sidebar";
+import MessageMedia from "./message-media";
+import VoiceRecorder from "./voice-recorder";
 import { supabase } from "../lib/supabase";
 import { recordClientMetric } from "../lib/performance-tracking";
 import {
@@ -81,6 +83,8 @@ type Message = {
   delivered_at: string | null;
   read_at: string | null;
   optimistic?: boolean;
+  reply_to_message_id?: string | null;
+  media_url?: string | null;
 };
 
 const MESSAGE_PAGE_SIZE = 80;
@@ -284,6 +288,11 @@ export default function DashboardClient() {
   const organizationIdRef = useRef<string | null>(cachedShell?.membership?.organization_id ?? null);
   const inboxRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [draft, setDraft] = useState("");
+  const [quotedMessage, setQuotedMessage] = useState<Message | null>(null);
+  const [recordedAudio, setRecordedAudio] = useState<File | null>(null);
+  const [recordedPreviewUrl, setRecordedPreviewUrl] = useState<string | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const messageInputRef = useRef<HTMLInputElement | null>(null);
   const [composerTool, setComposerTool] = useState<ComposerTool>(null);
   const [internalNotes, setInternalNotes] = useState<InternalNote[]>([]);
   const [assignmentEvents, setAssignmentEvents] = useState<AssignmentEvent[]>([]);
@@ -449,6 +458,60 @@ export default function DashboardClient() {
     ).slice(0, 12);
   }, [draft, quickReplies]);
 
+  const getDraftKey = useCallback((conversationId: string) => {
+    const owner = membership?.id || "unknown";
+    return `mais-chat:draft:${owner}:${conversationId}`;
+  }, [membership?.id]);
+
+  const updateDraft = useCallback((value: string) => {
+    setDraft(value);
+    const currentConversation = selectedIdRef.current;
+    if (!currentConversation) return;
+    try {
+      const key = getDraftKey(currentConversation);
+      if (value.trim()) sessionStorage.setItem(key, value);
+      else sessionStorage.removeItem(key);
+    } catch {
+      // Private browsing may disable sessionStorage; keep the in-memory draft.
+    }
+  }, [getDraftKey]);
+
+  useEffect(() => {
+    if (!selectedId) { setDraft(""); return; }
+    try {
+      setDraft(sessionStorage.getItem(getDraftKey(selectedId)) || "");
+    } catch {
+      setDraft("");
+    }
+  }, [selectedId, getDraftKey]);
+
+  useEffect(() => {
+    if (!recordedAudio) { setRecordedPreviewUrl(null); return; }
+    const url = URL.createObjectURL(recordedAudio);
+    setRecordedPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [recordedAudio]);
+
+  useEffect(() => {
+    const handleShortcuts = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      if (event.key === "Escape") {
+        setQuotedMessage(null);
+        setComposerTool(null);
+      }
+    };
+    window.addEventListener("keydown", handleShortcuts);
+    return () => window.removeEventListener("keydown", handleShortcuts);
+  }, []);
+
+  const byMessageId = useMemo(() =>
+    new Map(messages.map((message) => [message.id, message])),
+    [messages]
+  );
+
   const displayedMessages = useMemo(() => {
     const term = messageSearch.trim().toLowerCase();
     if (!messageSearchOpen || !term) return messages;
@@ -531,7 +594,7 @@ export default function DashboardClient() {
       if (!options?.background && !cached) setMessagesLoading(true);
       const { data: rows, error: messageError } = await supabase
         .from("messages")
-        .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at")
+        .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url")
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: false })
         .limit(MESSAGE_PAGE_SIZE);
@@ -573,7 +636,7 @@ export default function DashboardClient() {
     shouldAutoScrollRef.current = false;
     const { data, error: historyError } = await supabase
       .from("messages")
-      .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at")
+      .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url")
       .eq("conversation_id", conversationId)
       .lt("created_at", oldest.created_at)
       .order("created_at", { ascending: false })
@@ -844,6 +907,9 @@ export default function DashboardClient() {
 
     selectedIdRef.current = selectedId;
     shouldAutoScrollRef.current = true;
+    setQuotedMessage(null);
+    setRecordedAudio(null);
+    setComposerTool(null);
     const cached = messageCacheRef.current.get(selectedId);
     setMessages(cached?.items ?? []);
     setHasOlderMessages(cached?.hasMore ?? false);
@@ -1062,12 +1128,15 @@ export default function DashboardClient() {
     setError(null);
 
     const text = draft.trim();
+    const sentConversationId = selected.id;
+    const reply = quotedMessage;
     const optimisticId = `optimistic-${crypto.randomUUID()}`;
     const optimisticMessage: Message = {
       id: optimisticId,
       direction: "OUTBOUND",
       message_type: "text",
       body: text,
+      reply_to_message_id: reply?.id ?? null,
       status: "PENDING",
       created_at: new Date().toISOString(),
       sent_at: null,
@@ -1077,7 +1146,8 @@ export default function DashboardClient() {
     };
 
     shouldAutoScrollRef.current = true;
-    setDraft("");
+    updateDraft("");
+    setQuotedMessage(null);
     setMessages((current) => upsertMessage(current, optimisticMessage));
 
     const startedSend = performance.now();
@@ -1085,8 +1155,9 @@ export default function DashboardClient() {
       "whatsapp-send",
       {
         body: {
-          conversationId: selected.id,
-          text
+          conversationId: sentConversationId,
+          text,
+          replyToMessageId: reply?.id
         }
       }
     );
@@ -1100,6 +1171,10 @@ export default function DashboardClient() {
             : message
         )
       );
+      if (selectedIdRef.current === sentConversationId) {
+        updateDraft(text);
+        setQuotedMessage(reply);
+      }
       setError(await describeSendError(data, sendError,
         "Não foi possível enviar. Verifique a conexão do WhatsApp e a janela de atendimento."
       ));
@@ -1332,31 +1407,36 @@ export default function DashboardClient() {
     }
   }
 
-  async function sendAttachment(file: File) {
-    if (!selected || !connected || uploading || sending) return;
+  async function sendAttachment(file: File): Promise<boolean> {
+    if (!selected || !connected || uploading || sending) return false;
 
     const windowState = windowRemaining(
       selected.customer_service_window_expires_at
     );
     if (windowState === "Janela encerrada") {
       setError("A janela de atendimento está encerrada. Use um template aprovado.");
-      return;
+      return false;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setError("O anexo deve ter no máximo 5 MB.");
-      return;
-    }
-
-    const isImage = file.type.startsWith("image/");
+    const isImage = ["image/jpeg", "image/png"].includes(file.type);
     const isPdf = file.type === "application/pdf";
-    if (!isImage && !isPdf) {
-      setError("Por enquanto, envie imagens ou arquivos PDF.");
-      return;
+    const isAudio = ["audio/mpeg","audio/mp4","audio/aac","audio/amr","audio/ogg"].includes(file.type);
+    if (!isImage && !isPdf && !isAudio) {
+      setError("Envie imagens JPG/PNG, PDF ou áudio MP3/M4A/AAC/OGG.");
+      return false;
+    }
+    const maxSize = isAudio ? 12 : 5;
+    if (file.size > maxSize * 1024 * 1024) {
+      setError(`O anexo deve ter no máximo ${maxSize} MB.`);
+      return false;
     }
 
     setUploading(true);
     setError(null);
+
+    const sentConversationId = selected.id;
+    const reply = quotedMessage;
+    const caption = isAudio ? "" : draft.trim();
 
     try {
       const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -1369,13 +1449,13 @@ export default function DashboardClient() {
       const dataBase64 = dataUrl.split(",")[1];
       if (!dataBase64) throw new Error("Arquivo inválido.");
 
-      const caption = draft.trim();
       const optimisticId = `optimistic-${crypto.randomUUID()}`;
       const optimisticMessage: Message = {
         id: optimisticId,
         direction: "OUTBOUND",
-        message_type: isImage ? "image" : "document",
-        body: caption || `📎 ${file.name}`,
+        message_type: isImage ? "image" : isAudio ? "audio" : "document",
+        body: isAudio ? "🎤 Áudio" : caption || `📎 ${file.name}`,
+        reply_to_message_id: reply?.id ?? null,
         status: "PENDING",
         created_at: new Date().toISOString(),
         sent_at: null,
@@ -1385,16 +1465,18 @@ export default function DashboardClient() {
       };
 
       shouldAutoScrollRef.current = true;
-      setDraft("");
+      if (!isAudio) updateDraft("");
+      setQuotedMessage(null);
       setMessages((current) => upsertMessage(current, optimisticMessage));
 
       const { data, error: sendError } = await supabase.functions.invoke(
         "whatsapp-send",
         {
           body: {
-            conversationId: selected.id,
+            conversationId: sentConversationId,
+            replyToMessageId: reply?.id,
             attachment: {
-              kind: isImage ? "image" : "document",
+              kind: isImage ? "image" : isAudio ? "audio" : "document",
               name: file.name,
               mimeType: file.type,
               dataBase64,
@@ -1412,6 +1494,10 @@ export default function DashboardClient() {
               : message
           )
         );
+        if (selectedIdRef.current === sentConversationId) {
+          if (!isAudio) updateDraft(caption);
+          setQuotedMessage(reply);
+        }
         throw new Error(await describeSendError(data, sendError, "Não foi possível enviar o anexo."));
       }
 
@@ -1422,12 +1508,14 @@ export default function DashboardClient() {
           persisted
         )
       );
+      return true;
     } catch (attachmentError) {
       setError(
         attachmentError instanceof Error
           ? attachmentError.message
           : "Não foi possível enviar o anexo."
       );
+      return false;
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -1516,6 +1604,7 @@ export default function DashboardClient() {
           <label className="search">
             <span>⌕</span>
             <input
+              ref={searchInputRef}
               value={conversationSearch}
               onChange={(event) => setConversationSearch(event.target.value)}
               placeholder="Buscar contatos/mensagens..."
@@ -2012,23 +2101,43 @@ export default function DashboardClient() {
                       key={message.id}
                       className={`bubble ${message.direction === "INBOUND" ? "incoming" : "outgoing"}`}
                     >
-                      {message.body || (
-                        <span className="mediaPlaceholder">
-                          {message.message_type === "image"
-                            ? "Imagem"
-                            : message.message_type === "document"
-                              ? "Documento"
-                              : message.message_type === "audio"
-                                ? "Áudio"
-                                : message.message_type}
-                        </span>
+                      {message.reply_to_message_id && (
+                        <div className="chatQuotedBubble">
+                          <strong>↩ Resposta</strong>
+                          <span>{byMessageId.get(message.reply_to_message_id)?.body ||
+                            (byMessageId.get(message.reply_to_message_id)?.message_type
+                              ? "[" + byMessageId.get(message.reply_to_message_id)?.message_type + "]"
+                              : "Mensagem anterior")}</span>
+                        </div>
                       )}
+                      {["image", "document", "audio", "video", "sticker"].includes(message.message_type) ? (
+                        <>
+                          {message.body && <span className="chatMediaCaption">{message.body}</span>}
+                          {!message.optimistic && !message.id.startsWith("optimistic-") && (
+                            <MessageMedia messageId={message.id} kind={message.message_type} label={message.body}/>
+                          )}
+                        </>
+                      ) : (
+                        <span className="chatMessageText">{message.body || "[" + message.message_type + "]"}</span>
+                      )}
+                      <div className="chatMessageMeta">
+                        <button className="chatReplyAction" type="button"
+                          disabled={message.optimistic || message.id.startsWith("optimistic-")}
+                          title="Responder citando esta mensagem"
+                          onClick={() => {
+                            setQuotedMessage(message);
+                            setComposerTool(null);
+                            messageInputRef.current?.focus();
+                          }}>
+                          ↩ Responder
+                        </button>
                       <small>
                         {time(message.created_at)}
                         {message.direction === "OUTBOUND"
                           ? ` ${statusIcon(message.status)}`
                           : ""}
                       </small>
+                      </div>
                     </div>
                   ))}
                   <div ref={messagesEndRef} aria-hidden="true" />
@@ -2037,11 +2146,35 @@ export default function DashboardClient() {
             </div>
 
             <footer className={`composer flowLikeComposer ${connected ? "" : "composerLocked"}`}>
+              {quotedMessage && (
+                <div className="chatReplyPreview">
+                  <div>
+                    <strong>↩ Respondendo à mensagem</strong>
+                    <span>{quotedMessage.body || "[" + quotedMessage.message_type + "]"}</span>
+                  </div>
+                  <button type="button" onClick={() => setQuotedMessage(null)} aria-label="Cancelar resposta citada">×</button>
+                </div>
+              )}
+              {recordedAudio && recordedPreviewUrl && (
+                <div className="chatVoicePreview">
+                  <strong>Gravação pronta — revise antes de enviar</strong>
+                  <audio controls src={recordedPreviewUrl}/>
+                  <div className="chatVoicePreviewActions">
+                    <button type="button" onClick={() => setRecordedAudio(null)} disabled={uploading}>Descartar</button>
+                    <button type="button" disabled={uploading || sending || !connected || windowText === "Janela encerrada"}
+                      onClick={() => void (async () => {
+                        if (await sendAttachment(recordedAudio)) setRecordedAudio(null);
+                      })()}>
+                      {uploading ? "Enviando..." : "Enviar áudio"}
+                    </button>
+                  </div>
+                </div>
+              )}
               {(composerTool === "notes" || composerTool === "quick" || composerTool === "emoji" || draft.startsWith("/")) && (
                 <div className="chatUtilityPopover" role="region" aria-label="Ferramentas de atendimento">
                   <div className="chatUtilityHeader">
                     <strong>{composerTool === "notes" ? "Notas internas" : composerTool === "emoji" ? "Emojis" : "Respostas rápidas da equipe"}</strong>
-                    <button type="button" aria-label="Fechar ferramentas" onClick={() => { setComposerTool(null); if (draft.startsWith("/")) setDraft(""); }}>×</button>
+                    <button type="button" aria-label="Fechar ferramentas" onClick={() => { setComposerTool(null); if (draft.startsWith("/")) updateDraft(""); }}>×</button>
                   </div>
                   {composerTool === "notes" ? (
                     <div className="chatUtilityContent">
@@ -2065,7 +2198,7 @@ export default function DashboardClient() {
                   ) : composerTool === "emoji" ? (
                     <div className="chatEmojiGrid">
                       {["😀","😊","😉","😍","🙏","👍","✅","🎉","✨","❤️","📌","📅","💬","👋","💚","☀️"].map((emoji) => (
-                        <button type="button" key={emoji} onClick={() => { setDraft((text) => text + emoji); setComposerTool(null); }}
+                        <button type="button" key={emoji} onClick={() => { updateDraft(draft + emoji); setComposerTool(null); }}
                           aria-label={`Inserir ${emoji}`}>{emoji}</button>
                       ))}
                     </div>
@@ -2075,7 +2208,7 @@ export default function DashboardClient() {
                       <div className="chatQuickReplyList">
                         {suggestedQuickReplies.length === 0 ? <small>Nenhuma resposta encontrada. Cadastre uma abaixo.</small> :
                           suggestedQuickReplies.map((reply) => (
-                            <button type="button" key={reply.id} onClick={() => { setDraft(reply.body); setComposerTool(null); }}>
+                            <button type="button" key={reply.id} onClick={() => { updateDraft(reply.body); setComposerTool(null); }}>
                               <strong>/{reply.shortcut} — {reply.title}</strong>
                               <span>{reply.body}</span>
                             </button>
@@ -2105,7 +2238,7 @@ export default function DashboardClient() {
                 ref={fileInputRef}
                 className="attachmentInput"
                 type="file"
-                accept="image/*,application/pdf"
+                accept="image/jpeg,image/png,application/pdf,audio/mpeg,audio/mp4,audio/aac,audio/ogg,.mp3,.m4a,.aac,.ogg"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) void sendAttachment(file);
@@ -2134,7 +2267,7 @@ export default function DashboardClient() {
                   <button
                     type="button"
                     className="composerToolButton"
-                    title="Enviar imagem ou PDF"
+                    title="Anexar imagem, PDF ou áudio"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={
                       !connected ||
@@ -2145,6 +2278,15 @@ export default function DashboardClient() {
                   >
                     ⌕ <span>{uploading ? "Enviando..." : "Anexos"}</span>
                   </button>
+                  <VoiceRecorder
+                    key={selected.id}
+                    disabled={!connected || sending || uploading || Boolean(recordedAudio) || windowText === "Janela encerrada"}
+                    onReady={(file) => {
+                      setRecordedAudio(file);
+                      setComposerTool(null);
+                    }}
+                    onError={(message) => setError(message)}
+                  />
                   <button
                     type="button"
                     className="composerToolButton"
@@ -2181,13 +2323,14 @@ export default function DashboardClient() {
                   ☺
                 </button>
                 <input
+                ref={messageInputRef}
                 value={draft}
-                onChange={(event) => setDraft(event.target.value)}
+                onChange={(event) => updateDraft(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
                     if (draft.startsWith("/") && suggestedQuickReplies.length) {
-                      setDraft(suggestedQuickReplies[0].body);
+                      updateDraft(suggestedQuickReplies[0].body);
                       setComposerTool(null);
                     } else {
                       void sendMessage();
