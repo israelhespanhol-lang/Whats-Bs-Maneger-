@@ -243,6 +243,7 @@ export default function DashboardClient() {
   const [messageSearch, setMessageSearch] = useState("");
   const [actionsOpen, setActionsOpen] = useState(false);
   const [contactPanelOpen, setContactPanelOpen] = useState(true);
+  const channelSelectorRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
@@ -253,6 +254,33 @@ export default function DashboardClient() {
     () => conversations.find((item) => item.id === selectedId) ?? null,
     [conversations, selectedId]
   );
+
+  // A small anchored popover, not a fullscreen modal: close on an outside
+  // click or Escape, without committing the unsaved draft selection.
+  useEffect(() => {
+    if (!channelPickerOpen) return;
+
+    function onPointerDown(event: PointerEvent) {
+      if (
+        channelSelectorRef.current &&
+        !channelSelectorRef.current.contains(event.target as Node)
+      ) {
+        setChannelPickerOpen(false);
+      }
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setChannelPickerOpen(false);
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [channelPickerOpen]);
+
 
   const visibleConversations = useMemo(() => {
     const term = conversationSearch.trim().toLowerCase();
@@ -1201,6 +1229,7 @@ export default function DashboardClient() {
               onClick={() => {
                 setChannelDraftIds(selectedChannelIds);
                 setChannelPickerOpen(true);
+                setFilterPanelOpen(false);
               }}
             >
               Canais: {selectedChannelIds.length || "nenhum"}
@@ -1319,122 +1348,134 @@ export default function DashboardClient() {
         </div>
 
         <footer className="conversationListFooter">
-          <button
-            type="button"
-            onClick={() => {
-              setChannelDraftIds(selectedChannelIds);
-              setChannelPickerOpen(true);
-            }}
-            className="channelSelectorButton"
-          >
-            <i className={connected ? "online" : ""} />
-            <div>
-              <strong>
-                {selectedChannelIds.length === accounts.length
-                  ? "Todos os canais"
-                  : `${selectedChannelIds.length} canal(is)`}
-              </strong>
-              <span>
-                {account?.display_phone_number || "Selecionar canais"}
-              </span>
-            </div>
-            <b>⌄</b>
-          </button>
-        </footer>
-
-        {channelPickerOpen && (
-          <div className="channelPickerBackdrop" role="presentation">
-            <div className="channelPickerModal" role="dialog" aria-modal="true">
-              <div className="channelPickerHeader">
-                <div>
-                  <p className="eyebrow">CANAIS DE ATENDIMENTO</p>
-                  <h3>Selecionar canais</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setChannelDraftIds(selectedChannelIds);
-                    setChannelPickerOpen(false);
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-
-              <button
-                type="button"
-                className="channelSelectAll"
-                onClick={() =>
-                  setChannelDraftIds(
-                    channelDraftIds.length === accounts.length
-                      ? []
-                      : accounts.map((item) => item.id)
-                  )
+          <div className="channelSelectorAnchor" ref={channelSelectorRef}>
+            <button
+              type="button"
+              aria-expanded={channelPickerOpen}
+              aria-controls="channel-picker-menu"
+              aria-haspopup="dialog"
+              className={`channelSelectorButton ${channelPickerOpen ? "active" : ""}`}
+              onClick={() => {
+                if (channelPickerOpen) {
+                  setChannelPickerOpen(false);
+                } else {
+                  setChannelDraftIds(selectedChannelIds);
+                  setChannelPickerOpen(true);
+                  setFilterPanelOpen(false);
                 }
+              }}
+            >
+              <span className="channelSelectorSymbol" aria-hidden="true">◉</span>
+              <i className={connected ? "online" : ""} />
+              <div>
+                <strong>
+                  {selectedChannelIds.length === accounts.length
+                    ? "Todos os canais"
+                    : selectedChannelIds.length === 1
+                      ? accounts.find((item) => item.id === selectedChannelIds[0])
+                          ?.verified_name || "1 canal selecionado"
+                      : `${selectedChannelIds.length} canais selecionados`}
+                </strong>
+                <span>
+                  {selectedChannelIds.length === 1
+                    ? accounts.find((item) => item.id === selectedChannelIds[0])
+                        ?.display_phone_number || "WhatsApp"
+                    : `${selectedChannelIds.length} de ${accounts.length} canais`}
+                </span>
+              </div>
+              <b aria-hidden="true">{channelPickerOpen ? "⌃" : "⌄"}</b>
+            </button>
+
+            {channelPickerOpen && (
+              <div
+                id="channel-picker-menu"
+                className="channelDropdown"
+                role="dialog"
+                aria-label="Selecionar canais de atendimento"
+                aria-modal="false"
               >
-                {channelDraftIds.length === accounts.length
-                  ? "Limpar seleção"
-                  : "Selecionar todos"}
-              </button>
-
-              <div className="channelPickerList">
-                {accounts.map((channel) => (
-                  <label key={channel.id}>
-                    <input
-                      type="checkbox"
-                      checked={channelDraftIds.includes(channel.id)}
-                      onChange={(event) => {
-                        setChannelDraftIds((current) =>
-                          event.target.checked
-                            ? [...new Set([...current, channel.id])]
-                            : current.filter((id) => id !== channel.id)
-                        );
-                      }}
-                    />
-                    <div>
-                      <strong>{channel.verified_name || "WhatsApp"}</strong>
-                      <span>{channel.display_phone_number || "Sem telefone"}</span>
-                    </div>
-                    <em className={channel.status === "CONNECTED" ? "connected" : ""}>
-                      {channel.status === "CONNECTED" ? "Conectado" : channel.status}
-                    </em>
-                  </label>
-                ))}
-              </div>
-
-              <div className="channelPickerActions">
                 <button
                   type="button"
-                  className="secondaryAction"
+                  className={`channelDropdownAll ${channelDraftIds.length === accounts.length && accounts.length > 0 ? "selected" : ""}`}
                   onClick={() => {
-                    setChannelDraftIds(selectedChannelIds);
-                    setChannelPickerOpen(false);
+                    setChannelDraftIds(accounts.map((item) => item.id));
                   }}
                 >
-                  Cancelar
+                  <span className="channelDropdownStack" aria-hidden="true">▱</span>
+                  <span>Todos os canais</span>
+                  {channelDraftIds.length === accounts.length && accounts.length > 0 && (
+                    <span className="channelDropdownCheck" aria-hidden="true">✓</span>
+                  )}
                 </button>
-                <button
-                  type="button"
-                  className="secondaryAction"
-                  onClick={() => router.push("/settings/whatsapp")}
-                >
-                  Configurar canal
-                </button>
-                <button
-                  type="button"
-                  className="primaryAction"
-                  disabled={channelDraftIds.length === 0}
-                  onClick={() => {
-                    setSelectedChannelIds(channelDraftIds);
-                    setChannelPickerOpen(false);
-                  }}
-                >
-                  Abrir Chat com {channelDraftIds.length} selecionado(s)
-                </button>
+
+                <div className="channelDropdownList">
+                  {accounts.length === 0 ? (
+                    <p className="channelDropdownEmpty">Nenhum canal cadastrado.</p>
+                  ) : (
+                    accounts.map((channel) => {
+                      const chosen = channelDraftIds.includes(channel.id);
+                      const unreadCount = conversations
+                        .filter((conversation) => conversation.whatsapp_account_id === channel.id)
+                        .reduce((sum, conversation) => sum + Number(conversation.unread_count || 0), 0);
+                      return (
+                        <button
+                          type="button"
+                          key={channel.id}
+                          className={`channelDropdownItem ${chosen ? "selected" : ""}`}
+                          aria-pressed={chosen}
+                          onClick={() => {
+                            setChannelDraftIds((current) =>
+                              current.includes(channel.id)
+                                ? current.filter((id) => id !== channel.id)
+                                : [...current, channel.id]
+                            );
+                          }}
+                        >
+                          <span className="channelDropdownIcon" aria-hidden="true">WA</span>
+                          <span
+                            className={`channelDropdownStatus ${channel.status === "CONNECTED" ? "connected" : ""}`}
+                            aria-label={channel.status === "CONNECTED" ? "Conectado" : "Desconectado"}
+                          />
+                          <span className="channelDropdownDetails">
+                            <strong>{channel.verified_name || "WhatsApp API"}</strong>
+                            <small>{channel.display_phone_number || "Sem número"}</small>
+                          </span>
+                          {unreadCount > 0 && (
+                            <span className="channelDropdownUnread" aria-label={`${unreadCount} não lidas`}>
+                              {unreadCount > 99 ? "99+" : unreadCount}
+                            </span>
+                          )}
+                          {chosen && <span className="channelDropdownTick" aria-hidden="true">✓</span>}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="channelDropdownActions">
+                  <button
+                    type="button"
+                    className="channelDropdownCancel"
+                    onClick={() => setChannelPickerOpen(false)}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="channelDropdownApply"
+                    disabled={channelDraftIds.length === 0}
+                    onClick={() => {
+                      setSelectedChannelIds([...channelDraftIds]);
+                      setChannelPickerOpen(false);
+                    }}
+                  >
+                    Aplicar ({channelDraftIds.length})
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
-        )}
+        </footer>
       </section>
 
       <section className="chat">
