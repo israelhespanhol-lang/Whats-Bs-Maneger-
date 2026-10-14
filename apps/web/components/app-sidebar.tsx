@@ -172,26 +172,10 @@ export default function AppSidebar({
       <div className="sidebarTopBar">
         <div className="brand brandWithLogo">
           <BrandLogo className="brandLogo" />
-          <span className="sidebarCompactBrand" aria-label="Mais Chat">
-            <svg viewBox="0 0 44 44" width="38" height="38" aria-hidden="true">
-              <defs>
-                <linearGradient id="sidebar-brand-a" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor="#fae045" />
-                  <stop offset="50%" stopColor="#ff654b" />
-                  <stop offset="100%" stopColor="#e12c4b" />
-                </linearGradient>
-                <linearGradient id="sidebar-brand-b" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor="#29e6b7" />
-                  <stop offset="100%" stopColor="#117a96" />
-                </linearGradient>
-              </defs>
-              <rect width="44" height="44" rx="12" fill="#eef9f4"/>
-              <path d="M9 33V11c0-2 2.2-2.7 3.5-1.1L21 22l-4.1 9.4L9 33Z" fill="url(#sidebar-brand-a)" />
-              <path d="M35 33V11c0-2-2.2-2.7-3.5-1.1L23 22l4.1 9.4L35 33Z" fill="url(#sidebar-brand-b)" />
-              <path d="m16.9 31.4 4.1-9.4 2 2.9 4.1 6.5-5.1 3.1-5.1-3.1Z" fill="#12677c"/>
-            </svg>
+          <span className="sidebarCompactBrand" aria-label="Mais Viagens">
+            <BrandLogo className="sidebarCompactLogo" alt="Mais Viagens" />
           </span>
-          <span className="productName">Mais Chat</span>
+          {!collapsed && <span className="productName">Mais Chat</span>}
         </div>
         <button
           className="sidebarCollapseButton"
@@ -217,7 +201,7 @@ export default function AppSidebar({
       <nav className="sidebarNav">
         {groups.filter((group) => role !== "AGENT" || group.label !== "Operação").map((group) => (
           <div className="sidebarNavGroup" key={group.label}>
-            <span className="sidebarNavLabel">{group.label}</span>
+            {!collapsed && <span className="sidebarNavLabel">{group.label}</span>}
             {group.items.map((item) => (
               <Link
                 key={item.id}
@@ -228,8 +212,8 @@ export default function AppSidebar({
                 aria-current={active === item.id ? "page" : undefined}
                 prefetch
               >
-                <span className="navIcon"><SidebarIcon name={item.id} /></span>
-                <span className="navLabel">{item.label}</span>
+                <span className="navIcon" aria-hidden="true"><SidebarIcon name={item.id} /></span>
+                {!collapsed && <span className="navLabel">{item.label}</span>}
                 {item.id === "conversations" && unread > 0 && (
                   <span className="navBadge">{unread}</span>
                 )}
