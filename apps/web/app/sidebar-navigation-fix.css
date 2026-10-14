@@ -1,0 +1,202 @@
+/*
+ * Mais Chat | Unified sidebar repair.
+ * Legacy @media rules hide navigation captions at <=1180px even when the
+ * section layout still allocates a full-width sidebar. Keep labels readable.
+ * Imported after globals/product-sections/comfortable-typography.
+ */
+.sectionAppShell {
+  grid-template-columns: 244px minmax(0, 1fr);
+}
+.sectionAppShell > .sidebar {
+  width: 100%;
+  min-width: 0;
+  height: 100dvh;
+  min-height: 0;
+  box-sizing: border-box;
+  padding: 20px 13px 18px !important;
+  gap: 16px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(135,160,174,.28) transparent;
+}
+.sectionAppShell .sidebar .brandWithLogo {
+  align-items: flex-start;
+  padding: 2px 10px 16px !important;
+  border-bottom: 1px solid rgba(132,155,178,.13) !important;
+}
+.sectionAppShell .sidebar .brandLogo {
+  display: block;
+  width: 112px !important;
+  height: auto !important;
+  max-width: 100%;
+  object-fit: contain;
+}
+.sectionAppShell .sidebar .productName {
+  display: block !important;
+  font-size: 12px !important;
+  line-height: 1.4;
+  letter-spacing: .1em !important;
+  margin-top: 2px;
+}
+.sectionAppShell .sidebar .sidebarNav {
+  flex: 0 0 auto;
+  display: grid !important;
+  width: 100%;
+  min-width: 0;
+  overflow: visible;
+  gap: 18px !important;
+  padding: 0 0 10px !important;
+}
+.sectionAppShell .sidebar .sidebarNavGroup {
+  min-width: 0;
+  gap: 4px !important;
+}
+.sectionAppShell .sidebar .sidebarNavLabel {
+  display: block !important;
+  padding: 0 11px 6px !important;
+  font-size: 10px !important;
+  letter-spacing: .10em !important;
+  font-weight: 800;
+  color: #94a9b9 !important;
+  opacity: 1;
+}
+.sectionAppShell .sidebar .navItem {
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-start !important;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 45px !important;
+  padding: 10px 12px !important;
+  font-size: 13px !important;
+  text-decoration: none;
+}
+.sectionAppShell .sidebar .navItem .navIcon {
+  display: grid !important;
+  flex: 0 0 20px !important;
+  width: 20px !important;
+  height: 20px !important;
+  place-items: center;
+  font-size: 17px !important;
+}
+.sectionAppShell .sidebar .navIcon svg {
+  display: block;
+  width: 19px;
+  height: 19px;
+}
+.sectionAppShell .sidebar .navItem .navLabel {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  flex: 1 1 auto;
+  min-width: 0;
+  color: inherit;
+  font-size: 13px !important;
+  line-height: 1.35;
+  font-weight: 650;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sectionAppShell .sidebar .navItem .navBadge {
+  display: inline-grid !important;
+  flex: 0 0 auto;
+  font-size: 11px !important;
+}
+.sectionAppShell .sidebar .sidebarFooter {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 10px;
+  margin-top: auto;
+  min-width: 0;
+}
+.sectionAppShell .sidebar .themeToggle {
+  justify-content: flex-start !important;
+  gap: 10px;
+  padding: 10px 12px !important;
+  min-height: 42px !important;
+}
+.sectionAppShell .sidebar .themeText {
+  display: inline !important;
+  font-size: 13px !important;
+}
+.sectionAppShell .sidebar .sidebarUser {
+  display: grid;
+  grid-template-columns: 31px minmax(0, 1fr) 27px;
+  justify-items: stretch;
+  gap: 9px;
+  min-width: 0;
+}
+.sectionAppShell .sidebar .sidebarUser > div:not(.miniAvatar) {
+  display: block !important;
+  min-width: 0;
+}
+.sectionAppShell .sidebar .sidebarUser strong {
+  font-size: 12px !important;
+  overflow-wrap: anywhere;
+}
+.sectionAppShell .sidebar .sidebarUser span {
+  font-size: 11px !important;
+}
+.sectionAppShell .sidebar .sidebarUser button {
+  display: grid !important;
+  place-items: center;
+}
+.sectionAppShell .sidebar .connection {
+  display: block !important;
+  font-size: 11px !important;
+  overflow-wrap: anywhere;
+}
+.sectionAppShell .sidebar .teamPresenceSwitcher {
+  display: grid;
+  margin: 0;
+  padding: 11px;
+}
+.sectionAppShell .sidebar .teamPresenceSwitcher select {
+  max-width: 100%;
+  font-size: 12px !important;
+}
+.sectionAppShell .sectionWorkspace {
+  min-width: 0;
+}
+@media (max-width: 1180px) and (min-width: 901px) {
+  /* Inbox: 3 columns fit without hiding readable navigation. */
+  .appShell,
+  .appShell.contactPanelClosed {
+    grid-template-columns: 214px 300px minmax(360px, 1fr);
+  }
+  .appShell > .sidebar {
+    padding-inline: 12px;
+  }
+  .appShell .sidebar .navItem {
+    justify-content: flex-start !important;
+    padding: 10px 11px !important;
+  }
+  .appShell .sidebar .navItem .navLabel,
+  .appShell .sidebar .sidebarNavLabel,
+  .appShell .sidebar .productName,
+  .appShell .sidebar .themeText,
+  .appShell .sidebar .connection,
+  .appShell .sidebar .sidebarUser > div:not(.miniAvatar) {
+    display: block !important;
+  }
+  .appShell .sidebar .navItem .navBadge { display: inline-grid !important; }
+  .appShell .sidebar .navItem .navIcon { flex: 0 0 20px !important; width: 20px !important; }
+  .appShell .sidebar .navIcon svg { width: 19px; height: 19px; }
+  .appShell .sidebar .sidebarUser { grid-template-columns: 30px minmax(0,1fr) 27px; justify-items: stretch; }
+  .appShell .sidebar .sidebarUser button { display: grid; }
+  .appShell .sidebar .brandWithLogo { align-items: flex-start; }
+  .appShell .sidebar .brandLogo { width: 104px !important; height: auto; }
+}
+@media (max-width: 1050px) and (min-width: 681px) {
+  .sectionAppShell {
+    grid-template-columns: 226px minmax(0, 1fr);
+  }
+}
+@media (max-width: 900px) and (min-width: 681px) {
+  .sectionAppShell .sidebar .brandWithLogo { align-items: flex-start; }
+  .sectionAppShell .sidebar .navItem { justify-content: flex-start !important; }
+}
+/* The existing <=680px responsive layout intentionally hides this fixed sidebar. */

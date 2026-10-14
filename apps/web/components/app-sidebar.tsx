@@ -29,6 +29,24 @@ type Props = {
   onSignOut: () => void;
 };
 
+function SidebarIcon({ name }: { name: SidebarSection }) {
+  const common = { width: 19, height: 19, viewBox: "0 0 24 24",
+    fill: "none", stroke: "currentColor", strokeWidth: 1.8,
+    strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
+    "aria-hidden": true as const };
+  switch (name) {
+    case "conversations": return <svg {...common}><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8A8.5 8.5 0 0 1 12.5 3H13a8.48 8.48 0 0 1 8 8v.5Z"/></svg>;
+    case "crm": return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16M5.5 8h1M11.5 12h1M17.5 8h1"/></svg>;
+    case "contacts": return <svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3.1a4 4 0 0 1 0 7.8M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></svg>;
+    case "campaigns": return <svg {...common}><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>;
+    case "broadcasts": return <svg {...common}><path d="m22 2-7 20-4-9-9-4Z M22 2 11 13"/></svg>;
+    case "templates": return <svg {...common}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg>;
+    case "reports": return <svg {...common}><path d="M3 3v18h18M7 16v-4M12 16V7M17 16v-7"/></svg>;
+    case "team": return <svg {...common}><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v2"/></svg>;
+    case "settings": return <svg {...common}><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-2 2-.06-.06A1.65 1.65 0 0 0 15.9 18.5a1.65 1.65 0 0 0-1 .7L14 21h-4l-.9-1.8a1.65 1.65 0 0 0-2.83-.38L6.2 19l-2-2 .06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.7-1L2 13v-2l1.9-.9a1.65 1.65 0 0 0 .7-1 1.65 1.65 0 0 0-.33-1.82L4.2 7l2-2 .06.06A1.65 1.65 0 0 0 8.1 5.4a1.65 1.65 0 0 0 1-.7L10 3h4l.9 1.7a1.65 1.65 0 0 0 1 .7 1.65 1.65 0 0 0 1.82-.34L17.8 5l2 2-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 .7 1L22 11v2l-1.9.9a1.65 1.65 0 0 0-.7 1.1Z"/></svg>;
+  }
+}
+
 function initials(name: string) {
   return name
     .split(" ")
@@ -148,9 +166,11 @@ export default function AppSidebar({
                 key={item.id}
                 className={`navItem ${active === item.id ? "active" : ""}`}
                 href={item.href}
+                title={item.label}
+                aria-current={active === item.id ? "page" : undefined}
                 prefetch
               >
-                <i className="navIcon" aria-hidden="true">{item.icon}</i>
+                <span className="navIcon"><SidebarIcon name={item.id} /></span>
                 <span className="navLabel">{item.label}</span>
                 {item.id === "conversations" && unread > 0 && (
                   <span className="navBadge">{unread}</span>
