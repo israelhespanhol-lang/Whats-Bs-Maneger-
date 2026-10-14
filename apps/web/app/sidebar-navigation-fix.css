@@ -441,3 +441,67 @@
     transition: none;
   }
 }
+
+
+/* Hotfix: fully hide labels in the compact rail, even when legacy !important
+ * specificity in globals.css or sidebar-navigation-fix.css competes.
+ * The same labels are also omitted in React while the sidebar is collapsed.
+ */
+@media (min-width: 681px) {
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebar .navItem .navLabel,
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebar .sidebarNavGroup > .sidebarNavLabel,
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebar .brandWithLogo > .productName,
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebar .sidebarFooter .themeText,
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebar .sidebarFooter .teamPresenceSwitcher,
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebar .sidebarFooter .connection,
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebar .sidebarUser > div:not(.miniAvatar) {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    max-width: 0 !important;
+    flex: 0 0 0 !important;
+    overflow: hidden !important;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebar .sidebarNavGroup {
+    align-items: center;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebar .sidebarNavGroup .navItem {
+    justify-content: center !important;
+    gap: 0 !important;
+    font-size: 0 !important;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebar .sidebarNavGroup .navItem .navIcon {
+    flex: 0 0 23px !important;
+    width: 23px !important;
+    margin: 0 !important;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebar .brandWithLogo > .sidebarCompactBrand {
+    display: block !important;
+    position: relative;
+    width: 42px;
+    height: 44px;
+    padding: 0;
+    margin: 0;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #fff;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebar .brandWithLogo .sidebarCompactLogo {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 110px !important;
+    max-width: none !important;
+    height: auto !important;
+    min-width: 110px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    object-fit: initial !important;
+  }
+}
+/* Keep the full-width logo and labels unchanged in expanded mode. */
