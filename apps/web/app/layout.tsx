@@ -21,6 +21,10 @@ const themeBootstrap = `
             : "light";
       document.documentElement.dataset.theme = theme;
       document.documentElement.style.colorScheme = theme;
+      document.documentElement.dataset.sidebarCollapsed =
+        localStorage.getItem("mais-chat-sidebar-collapsed") === "true"
+          ? "true"
+          : "false";
     } catch {}
   })();
 `;

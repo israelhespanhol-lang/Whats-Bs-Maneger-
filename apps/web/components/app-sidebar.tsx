@@ -106,6 +106,23 @@ export default function AppSidebar({
   const [availability, setAvailability] = useState<"AVAILABLE"|"AWAY"|"OFFLINE">("OFFLINE");
   const [savingPresence, setSavingPresence] = useState(false);
   const [presenceError, setPresenceError] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+
+  // The root script applies the saved preference before first paint, so
+  // navigation across modules does not expand the sidebar for a frame.
+  useEffect(() => {
+    setCollapsed(document.documentElement.dataset.sidebarCollapsed === "true");
+  }, []);
+
+  function setSidebarCollapsed(next: boolean) {
+    setCollapsed(next);
+    document.documentElement.dataset.sidebarCollapsed = String(next);
+    try {
+      window.localStorage.setItem("mais-chat-sidebar-collapsed", String(next));
+    } catch {
+      // Keep the current session functional when storage is blocked.
+    }
+  }
 
   useEffect(() => {
     if (!memberId || !organizationId) return;
@@ -151,10 +168,50 @@ export default function AppSidebar({
     setSavingPresence(false);
   }
   return (
-    <aside className="sidebar">
-      <div className="brand brandWithLogo">
-        <BrandLogo className="brandLogo" />
-        <span className="productName">Mais Chat</span>
+    <aside className={`sidebar ${collapsed ? "sidebarCollapsed" : ""}`}>
+      <div className="sidebarTopBar">
+        <div className="brand brandWithLogo">
+          <BrandLogo className="brandLogo" />
+          <span className="sidebarCompactBrand" aria-label="Mais Chat">
+            <svg viewBox="0 0 44 44" width="38" height="38" aria-hidden="true">
+              <defs>
+                <linearGradient id="sidebar-brand-a" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#fae045" />
+                  <stop offset="50%" stopColor="#ff654b" />
+                  <stop offset="100%" stopColor="#e12c4b" />
+                </linearGradient>
+                <linearGradient id="sidebar-brand-b" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#29e6b7" />
+                  <stop offset="100%" stopColor="#117a96" />
+                </linearGradient>
+              </defs>
+              <rect width="44" height="44" rx="12" fill="#eef9f4"/>
+              <path d="M9 33V11c0-2 2.2-2.7 3.5-1.1L21 22l-4.1 9.4L9 33Z" fill="url(#sidebar-brand-a)" />
+              <path d="M35 33V11c0-2-2.2-2.7-3.5-1.1L23 22l4.1 9.4L35 33Z" fill="url(#sidebar-brand-b)" />
+              <path d="m16.9 31.4 4.1-9.4 2 2.9 4.1 6.5-5.1 3.1-5.1-3.1Z" fill="#12677c"/>
+            </svg>
+          </span>
+          <span className="productName">Mais Chat</span>
+        </div>
+        <button
+          className="sidebarCollapseButton"
+          type="button"
+          onClick={() => setSidebarCollapsed(!collapsed)}
+          aria-label={collapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
+          aria-expanded={!collapsed}
+          title={collapsed ? "Expandir menu" : "Recolher menu"}
+        >
+          {collapsed ? (
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+              <path d="M10 6 16 12l-6 6M4 4v16" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <path d="M9 4v16M15 9l-3 3 3 3" />
+            </svg>
+          )}
+        </button>
       </div>
 
       <nav className="sidebarNav">
@@ -167,6 +224,7 @@ export default function AppSidebar({
                 className={`navItem ${active === item.id ? "active" : ""}`}
                 href={item.href}
                 title={item.label}
+                aria-label={item.label}
                 aria-current={active === item.id ? "page" : undefined}
                 prefetch
               >
@@ -183,6 +241,17 @@ export default function AppSidebar({
 
       <div className="sidebarFooter">
         <ThemeToggle />
+        {memberId && organizationId && (
+          <button
+            type="button"
+            className="sidebarPresenceShortcut"
+            onClick={() => setSidebarCollapsed(false)}
+            title="Expandir menu para alterar disponibilidade"
+            aria-label="Expandir menu para alterar disponibilidade"
+          >
+            <span className={`sidebarPresenceDot sidebarPresenceDot--${availability.toLowerCase()}`} aria-hidden="true" />
+          </button>
+        )}
         {memberId && organizationId && (
           <div className="teamPresenceSwitcher">
             <label htmlFor="teamPresenceStatus">Sua disponibilidade</label>

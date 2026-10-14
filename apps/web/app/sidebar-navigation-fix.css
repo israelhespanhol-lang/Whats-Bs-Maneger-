@@ -200,3 +200,244 @@
   .sectionAppShell .sidebar .navItem { justify-content: flex-start !important; }
 }
 /* The existing <=680px responsive layout intentionally hides this fixed sidebar. */
+
+
+/* Collapsible navigation — persisted across routes on the root element.
+ * Keep the content grid synchronized with the icon rail's width.
+ */
+.sectionAppShell,
+.appShell {
+  transition: grid-template-columns 220ms ease;
+}
+:is(.sectionAppShell, .appShell) > .sidebar {
+  transition: padding 220ms ease;
+}
+:is(.sectionAppShell, .appShell) .sidebarTopBar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 7px;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+:is(.sectionAppShell, .appShell) .sidebarTopBar .brandWithLogo {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-right: 0 !important;
+}
+:is(.sectionAppShell, .appShell) .sidebarCollapseButton {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(137,162,184,.23);
+  border-radius: 10px;
+  background: rgba(151,175,195,.07);
+  color: #c7d9e5;
+  padding: 0;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+:is(.sectionAppShell, .appShell) .sidebarCollapseButton:hover,
+:is(.sectionAppShell, .appShell) .sidebarCollapseButton:focus-visible {
+  background: rgba(83,222,159,.12);
+  border-color: rgba(58,218,144,.52);
+  color: #65e2aa;
+}
+:is(.sectionAppShell, .appShell) .sidebarCollapseButton:focus-visible,
+:is(.sectionAppShell, .appShell) .sidebar .navItem:focus-visible {
+  outline: 2px solid #4cd59a;
+  outline-offset: 2px;
+}
+:is(.sectionAppShell, .appShell) .sidebarCompactBrand,
+:is(.sectionAppShell, .appShell) .sidebarPresenceShortcut {
+  display: none;
+}
+
+@media (min-width: 681px) {
+  html[data-sidebar-collapsed="true"] .sectionAppShell {
+    grid-template-columns: 78px minmax(0, 1fr) !important;
+  }
+  html[data-sidebar-collapsed="true"] .appShell {
+    grid-template-columns: 78px 348px minmax(475px, 1fr) 318px !important;
+  }
+  html[data-sidebar-collapsed="true"] .appShell.contactPanelClosed {
+    grid-template-columns: 78px 348px minmax(475px, 1fr) !important;
+  }
+
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) > .sidebar {
+    padding: 14px 9px 15px !important;
+    gap: 14px;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebarTopBar {
+    flex-direction: column-reverse;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 2px;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebarTopBar .brandWithLogo {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    align-self: stretch;
+    padding: 0 0 12px !important;
+    margin: 0 !important;
+    min-width: 0;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .brandLogo,
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .productName,
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebarNavLabel,
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .navLabel,
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .themeText,
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .teamPresenceSwitcher,
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebarUser > div:not(.miniAvatar),
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .connection {
+    display: none !important;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebarCompactBrand {
+    display: grid !important;
+    place-items: center;
+    width: 43px;
+    height: 43px;
+    border-radius: 12px;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebarCollapseButton {
+    flex: 0 0 37px;
+    width: 42px;
+    height: 37px;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebarNav {
+    display: grid !important;
+    gap: 16px !important;
+    padding: 0 !important;
+    overflow: visible;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebarNavGroup {
+    gap: 6px !important;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebar .navItem {
+    position: relative !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center !important;
+    width: 52px;
+    height: 48px;
+    min-height: 48px !important;
+    padding: 0 !important;
+    margin-inline: auto !important;
+    border-radius: 12px !important;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebar .navItem .navIcon {
+    display: grid !important;
+    place-items: center;
+    flex: 0 0 23px !important;
+    width: 23px !important;
+    height: 23px !important;
+    font-size: 20px !important;
+    line-height: 1;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebar .navIcon svg {
+    display: block;
+    width: 22px;
+    height: 22px;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebar .navItem .navBadge {
+    display: inline-grid !important;
+    position: absolute !important;
+    top: 0;
+    right: -3px;
+    min-width: 18px !important;
+    height: 18px !important;
+    padding: 0 3px !important;
+    font-size: 10px !important;
+    place-items: center;
+    border-radius: 999px;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebarFooter {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    width: 100%;
+    margin-top: auto;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebar .themeToggle {
+    display: grid;
+    place-items: center;
+    width: 52px !important;
+    min-height: 46px !important;
+    height: 46px;
+    padding: 0 !important;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .themeIcon {
+    width: 23px;
+    height: 23px;
+    font-size: 21px !important;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebarPresenceShortcut {
+    display: grid !important;
+    place-items: center;
+    width: 52px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid rgba(137,162,184,.18);
+    border-radius: 10px;
+    background: rgba(151,175,195,.07);
+    cursor: pointer;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebarPresenceShortcut:hover {
+    border-color: rgba(58,218,144,.48);
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebarPresenceDot {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    border: 2px solid #76889a;
+    background: transparent;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebarPresenceDot--available {
+    border-color: #31da8e;
+    background: #31da8e;
+    box-shadow: 0 0 0 4px rgba(49,218,142,.12);
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebarPresenceDot--away {
+    border-color: #e9b955;
+    background: #e9b955;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebarUser {
+    display: grid !important;
+    justify-items: center;
+    grid-template-columns: 1fr !important;
+    width: 100%;
+    padding: 10px 0 !important;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebarUser .miniAvatar {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    margin: 0;
+  }
+  html[data-sidebar-collapsed="true"] :is(.sectionAppShell, .appShell) .sidebarUser button {
+    display: none !important;
+  }
+}
+@media (min-width: 901px) and (max-width: 1180px) {
+  html[data-sidebar-collapsed="true"] .appShell,
+  html[data-sidebar-collapsed="true"] .appShell.contactPanelClosed {
+    grid-template-columns: 78px 300px minmax(360px, 1fr) !important;
+  }
+}
+@media (min-width: 681px) and (max-width: 900px) {
+  html[data-sidebar-collapsed="true"] .appShell,
+  html[data-sidebar-collapsed="true"] .appShell.contactPanelClosed {
+    grid-template-columns: 78px minmax(265px, 300px) minmax(320px, 1fr) !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sectionAppShell, .appShell,
+  :is(.sectionAppShell, .appShell) > .sidebar {
+    transition: none;
+  }
+}
