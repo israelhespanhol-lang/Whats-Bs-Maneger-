@@ -69,7 +69,7 @@ const groups: Array<{
   {
     label: "Atendimento",
     items: [
-      { id: "conversations", label: "Conversas", href: "/", icon: "◉" },
+      { id: "conversations", label: "Suporte", href: "/", icon: "◉" },
       { id: "crm", label: "CRM Kanban", href: "/crm", icon: "▦" },
       { id: "contacts", label: "Contatos", href: "/contacts", icon: "◎" }
     ]
@@ -78,7 +78,7 @@ const groups: Array<{
     label: "Operação",
     items: [
       { id: "campaigns", label: "Campanhas", href: "/campaigns", icon: "◇" },
-      { id: "broadcasts", label: "Disparos", href: "/broadcasts", icon: "➤" },
+      { id: "broadcasts", label: "COEX · Disparos", href: "/broadcasts", icon: "➤" },
       { id: "templates", label: "Templates", href: "/templates", icon: "▤" }
     ]
   },
