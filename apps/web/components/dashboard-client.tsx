@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import BrandLogo from "./brand-logo";
 import AppSidebar from "./app-sidebar";
 import MessageMedia from "./message-media";
@@ -1583,8 +1584,8 @@ export default function DashboardClient() {
       <section className="conversationList">
         <header className="flowInboxHeader">
           <div>
-            <p className="eyebrow">CAIXA DE ENTRADA</p>
-            <h1>Conversas</h1>
+            <p className="eyebrow">CAIXA DE ENTRADA · MESMO CANAL DO COEX</p>
+            <h1>Suporte</h1>
             <span className="conversationOrdering">
               Ordenadas por{" "}
               {conversationOrder === "RECENT"
@@ -1601,6 +1602,16 @@ export default function DashboardClient() {
             ＋
           </button>
         </header>
+
+        <div className="supportSharedChannel" aria-label="Canal comercial do atendimento">
+          <span className="supportSharedChannelNumber" title="Número conectado para atendimento e campanhas">
+            <span className={connected ? "supportChannelIndicator online" : "supportChannelIndicator"} aria-hidden="true" />
+            <span>{account?.display_phone_number || "Canal comercial"}</span>
+          </span>
+          {membership.role !== "AGENT" && (
+            <Link href="/broadcasts" title="Abrir COEX — campanhas e templates">COEX <span aria-hidden="true">↗</span></Link>
+          )}
+        </div>
 
         <div className="conversationSearchRow">
           <label className="search">
