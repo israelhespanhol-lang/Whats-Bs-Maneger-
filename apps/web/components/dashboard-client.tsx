@@ -85,6 +85,13 @@ type Message = {
   optimistic?: boolean;
   reply_to_message_id?: string | null;
   media_url?: string | null;
+  raw_payload?: {
+    sent_by?: {
+      member_id?: string;
+      display_name?: string;
+      source?: string;
+    };
+  } | null;
 };
 
 const MESSAGE_PAGE_SIZE = 80;
@@ -594,7 +601,7 @@ export default function DashboardClient() {
       if (!options?.background && !cached) setMessagesLoading(true);
       const { data: rows, error: messageError } = await supabase
         .from("messages")
-        .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url")
+        .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url,raw_payload")
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: false })
         .limit(MESSAGE_PAGE_SIZE);
@@ -636,7 +643,7 @@ export default function DashboardClient() {
     shouldAutoScrollRef.current = false;
     const { data, error: historyError } = await supabase
       .from("messages")
-      .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url")
+      .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url,raw_payload")
       .eq("conversation_id", conversationId)
       .lt("created_at", oldest.created_at)
       .order("created_at", { ascending: false })
@@ -1142,7 +1149,14 @@ export default function DashboardClient() {
       sent_at: null,
       delivered_at: null,
       read_at: null,
-      optimistic: true
+      optimistic: true,
+      raw_payload: {
+        sent_by: {
+          member_id: membership?.id,
+          display_name: userName,
+          source: "mais_chat"
+        }
+      }
     };
 
     shouldAutoScrollRef.current = true;
