@@ -61,8 +61,7 @@ function respond(res, status, body) {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
     "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "DENY",
-    "Access-Control-Allow-Origin": "null"
+    "X-Frame-Options": "DENY"
   });
   res.end(JSON.stringify(body));
 }
