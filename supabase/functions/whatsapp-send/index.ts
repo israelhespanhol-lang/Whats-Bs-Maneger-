@@ -195,6 +195,22 @@ Deno.serve(async (req: Request) => {
     }, 409);
   }
 
+  // Attribute the message to the *authenticated sender*, not to the
+  // conversation's current owner: transfers must not rewrite message history.
+  const { data: sender, error: senderError } = await client
+    .from("organization_members")
+    .select("id,users(name)")
+    .eq("organization_id", conversation.organization_id)
+    .eq("user_id", userData.user.id)
+    .maybeSingle();
+  if (senderError || !sender) {
+    return json({ error: "Não foi possível identificar o atendente autenticado." }, 403);
+  }
+  const senderUser = Array.isArray(sender.users) ? sender.users[0] : sender.users;
+  const senderName = typeof senderUser?.name === "string" && senderUser.name.trim()
+    ? senderUser.name.trim().slice(0, 100)
+    : "Atendente";
+
   let repliedMessageId: string | null = null;
   let repliedWhatsappId: string | null = null;
   if (replyToMessageId) {
@@ -356,6 +372,11 @@ Deno.serve(async (req: Request) => {
       raw_payload: {
         provider: "meta",
         accepted: true,
+        sent_by: {
+          member_id: sender.id,
+          display_name: senderName,
+          source: "mais_chat"
+        },
         ...(attachment
           ? {
               attachment: {
