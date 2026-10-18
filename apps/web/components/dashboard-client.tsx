@@ -1475,7 +1475,14 @@ export default function DashboardClient() {
         sent_at: null,
         delivered_at: null,
         read_at: null,
-        optimistic: true
+        optimistic: true,
+        raw_payload: {
+          sent_by: {
+            member_id: membership?.id,
+            display_name: userName,
+            source: "mais_chat"
+          }
+        }
       };
 
       shouldAutoScrollRef.current = true;
@@ -1742,7 +1749,7 @@ export default function DashboardClient() {
                     </span>
 
                     <p className="conversationPreview">
-                      {item.last_message_direction === "OUTBOUND" ? "Você: " : ""}
+                      {item.last_message_direction === "OUTBOUND" ? "Equipe: " : ""}
                       {item.last_message_preview || "Sem prévia de mensagem"}
                     </p>
 
@@ -2117,6 +2124,13 @@ export default function DashboardClient() {
                       key={message.id}
                       className={`bubble ${message.direction === "INBOUND" ? "incoming" : "outgoing"}`}
                     >
+                      {message.direction === "OUTBOUND" &&
+                        message.raw_payload?.sent_by?.source === "mais_chat" &&
+                        message.raw_payload.sent_by.display_name && (
+                          <span className="chatSenderName" title="Atendente que enviou esta mensagem">
+                            <span aria-hidden="true">●</span> {message.raw_payload.sent_by.display_name}
+                          </span>
+                        )}
                       {message.reply_to_message_id && (
                         <div className="chatQuotedBubble">
                           <strong>↩ Resposta</strong>
