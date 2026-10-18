@@ -391,7 +391,7 @@ Deno.serve(async (req: Request) => {
       created_at: now
     })
     .select(
-      "id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url,raw_payload"
+      "id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url,sent_by:raw_payload->sent_by"
     )
     .single();
 
@@ -400,7 +400,7 @@ Deno.serve(async (req: Request) => {
       const { data: existing } = await client
         .from("messages")
         .select(
-          "id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url,raw_payload"
+          "id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url,sent_by:raw_payload->sent_by"
         )
         .eq("organization_id", conversation.organization_id)
         .eq("whatsapp_message_id", whatsappMessageId)
