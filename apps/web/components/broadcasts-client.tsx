@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
+import Link from "next/link";
 import SectionLayout from "./section-layout";
 import { supabase } from "../lib/supabase";
 import { useMaisChatContext } from "../lib/use-mais-chat-context";
@@ -1436,9 +1437,9 @@ export default function BroadcastsClient() {
       unread={ctx.unread}
       error={ctx.error}
       onSignOut={() => void ctx.signOut()}
-      eyebrow="WHATSAPP"
-      title="Disparos"
-      description="Prepare envios em massa com template aprovado, público definido e acompanhamento de custo estimado."
+      eyebrow="COEX · OPERAÇÃO"
+      title="COEX — Disparos"
+      description="Envie templates aprovados pela API oficial; as respostas chegam ao Suporte, usando a mesma conta comercial."
       actions={
         <div className="templateTopActions">
           <button
@@ -1466,6 +1467,26 @@ export default function BroadcastsClient() {
         </div>
       }
     >
+      <section className="coexSharedChannel" aria-label="Canal de disparos e suporte">
+        <div className="coexSharedChannelHead">
+          <span className="coexSharedTag">1 NÚMERO · 2 AMBIENTES</span>
+          <span className={ctx.account?.status === "CONNECTED" ? "coexSharedOnline" : "coexSharedOffline"}>
+            {ctx.account?.status === "CONNECTED" ? "Cloud API conectada" : "Cloud API não conectada"}
+          </span>
+        </div>
+        <h2>COEX envia. Suporte atende.</h2>
+        <p>
+          {ctx.account?.display_phone_number
+            ? `Canal comercial: ${ctx.account.display_phone_number}. `
+            : "Canal comercial da organização. "}
+          Os contatos que respondem entram na caixa de Suporte do Mais Chat pelo mesmo WhatsApp.
+          Os atendentes usam logins individuais e podem assumir ou transferir conversas.
+        </p>
+        <div className="coexSharedChannelFoot">
+          <span>WhatsApp Business App: <strong>coexistência ainda não configurada</strong>. Esta aba utiliza somente a API.</span>
+          <Link href="/" className="coexSupportLink">Abrir Suporte <span aria-hidden="true">↗</span></Link>
+        </div>
+      </section>
       <div className="broadcastSafetyBanner">
         <div>
           <strong>Controle manual de envio</strong>
