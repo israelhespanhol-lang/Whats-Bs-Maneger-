@@ -1,0 +1,29 @@
+name: Linked-session experimental lab
+on:
+  pull_request:
+    paths:
+      - 'experiments/whatsapp-session-bridge/**'
+      - '.github/workflows/linked-session-lab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lab:
+    name: Node syntax and safety tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: experiments/whatsapp-session-bridge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated dependencies
+        run: npm install --no-audit --no-fund --ignore-scripts
+      - name: Syntax validation
+        run: npm run check
+      - name: Pure unit tests (never connects to WhatsApp)
+        run: npm test
