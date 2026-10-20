@@ -86,6 +86,20 @@ type Message = {
   optimistic?: boolean;
   reply_to_message_id?: string | null;
   media_url?: string | null;
+  sent_by?: {
+    member_id?: string;
+    display_name?: string;
+    source?: string;
+  } | null;
+  // Realtime events can include this original object. History uses
+  // a small JSON projection to avoid loading the complete Meta payload.
+  raw_payload?: {
+    sent_by?: {
+      member_id?: string;
+      display_name?: string;
+      source?: string;
+    };
+  } | null;
 };
 
 const MESSAGE_PAGE_SIZE = 80;
@@ -595,7 +609,7 @@ export default function DashboardClient() {
       if (!options?.background && !cached) setMessagesLoading(true);
       const { data: rows, error: messageError } = await supabase
         .from("messages")
-        .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url")
+        .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url,sent_by:raw_payload->sent_by")
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: false })
         .limit(MESSAGE_PAGE_SIZE);
@@ -637,7 +651,7 @@ export default function DashboardClient() {
     shouldAutoScrollRef.current = false;
     const { data, error: historyError } = await supabase
       .from("messages")
-      .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url")
+      .select("id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url,sent_by:raw_payload->sent_by")
       .eq("conversation_id", conversationId)
       .lt("created_at", oldest.created_at)
       .order("created_at", { ascending: false })
@@ -1143,7 +1157,12 @@ export default function DashboardClient() {
       sent_at: null,
       delivered_at: null,
       read_at: null,
-      optimistic: true
+      optimistic: true,
+      sent_by: {
+          member_id: membership?.id,
+          display_name: userName,
+          source: "mais_chat"
+        }
     };
 
     shouldAutoScrollRef.current = true;
@@ -1462,7 +1481,12 @@ export default function DashboardClient() {
         sent_at: null,
         delivered_at: null,
         read_at: null,
-        optimistic: true
+        optimistic: true,
+        sent_by: {
+          member_id: membership?.id,
+          display_name: userName,
+          source: "mais_chat"
+        }
       };
 
       shouldAutoScrollRef.current = true;
@@ -1739,7 +1763,7 @@ export default function DashboardClient() {
                     </span>
 
                     <p className="conversationPreview">
-                      {item.last_message_direction === "OUTBOUND" ? "Você: " : ""}
+                      {item.last_message_direction === "OUTBOUND" ? "Equipe: " : ""}
                       {item.last_message_preview || "Sem prévia de mensagem"}
                     </p>
 
@@ -2114,6 +2138,13 @@ export default function DashboardClient() {
                       key={message.id}
                       className={`bubble ${message.direction === "INBOUND" ? "incoming" : "outgoing"}`}
                     >
+                      {message.direction === "OUTBOUND" &&
+                        (message.sent_by ?? message.raw_payload?.sent_by)?.source === "mais_chat" &&
+                        (message.sent_by ?? message.raw_payload?.sent_by)?.display_name && (
+                          <span className="chatSenderName" title="Atendente que enviou esta mensagem">
+                            <span aria-hidden="true">●</span> {(message.sent_by ?? message.raw_payload?.sent_by)?.display_name}
+                          </span>
+                        )}
                       {message.reply_to_message_id && (
                         <div className="chatQuotedBubble">
                           <strong>↩ Resposta</strong>

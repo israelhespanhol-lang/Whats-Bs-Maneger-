@@ -195,6 +195,42 @@ Deno.serve(async (req: Request) => {
     }, 409);
   }
 
+  // Attribute the message to the *authenticated sender*, not to the
+  // conversation's current owner: transfers must not rewrite message history.
+  const { data: sender, error: senderError } = await client
+    .from("organization_members")
+    .select("id,users(name)")
+    .eq("organization_id", conversation.organization_id)
+    .eq("user_id", userData.user.id)
+    .maybeSingle();
+  if (senderError || !sender) {
+    return json({ error: "Não foi possível identificar o atendente autenticado." }, 403);
+  }
+  const senderUser = Array.isArray(sender.users) ? sender.users[0] : sender.users;
+  const senderName = typeof senderUser?.name === "string" && senderUser.name.trim()
+    ? senderUser.name.replace(/[\r\n\t\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 100)
+    : "Atendente";
+
+  // Identify the attendant to the customer only on manual messages.
+  // Template/bulk endpoints are deliberately untouched.
+  const senderPrefix = senderName + ":";
+  const signedText = text
+    ? (text.startsWith(senderPrefix) ? text : senderPrefix + "\n" + text)
+    : null;
+  const signedCaption = attachment?.kind !== "audio"
+    ? (attachment?.caption?.trim()
+        ? (attachment.caption.trim().startsWith(senderPrefix)
+            ? attachment.caption.trim()
+            : senderPrefix + "\n" + attachment.caption.trim())
+        : senderPrefix)
+    : null;
+  if (signedText && signedText.length > 4096) {
+    return json({ error: "A mensagem com a assinatura do atendente excede 4096 caracteres." }, 400);
+  }
+  if (signedCaption && signedCaption.length > 1024) {
+    return json({ error: "A legenda com a assinatura excede 1024 caracteres." }, 400);
+  }
+
   let repliedMessageId: string | null = null;
   let repliedWhatsappId: string | null = null;
   if (replyToMessageId) {
@@ -215,7 +251,7 @@ Deno.serve(async (req: Request) => {
 
   let metaPayload: Record<string, unknown>;
   let messageType = "text";
-  let storedBody = text ?? null;
+  let storedBody = signedText;
   let uploadedMediaId: string | null = null;
 
   if (attachment) {
@@ -260,7 +296,7 @@ Deno.serve(async (req: Request) => {
     storedBody =
       attachment.kind === "audio"
         ? "🎤 Áudio"
-        : attachment.caption?.trim() || `📎 ${attachment.name}`;
+        : signedCaption || `📎 ${attachment.name}`;
 
     if (attachment.kind === "image") {
       metaPayload = {
@@ -270,8 +306,8 @@ Deno.serve(async (req: Request) => {
         type: "image",
         image: {
           id: uploadedMediaId,
-          ...(attachment.caption?.trim()
-            ? { caption: attachment.caption.trim() }
+          ...(signedCaption
+            ? { caption: signedCaption }
             : {})
         }
       };
@@ -292,8 +328,8 @@ Deno.serve(async (req: Request) => {
         document: {
           id: uploadedMediaId,
           filename: attachment.name,
-          ...(attachment.caption?.trim()
-            ? { caption: attachment.caption.trim() }
+          ...(signedCaption
+            ? { caption: signedCaption }
             : {})
         }
       };
@@ -306,7 +342,7 @@ Deno.serve(async (req: Request) => {
       type: "text",
       text: {
         preview_url: false,
-        body: text
+        body: signedText
       }
     };
   }
@@ -356,6 +392,11 @@ Deno.serve(async (req: Request) => {
       raw_payload: {
         provider: "meta",
         accepted: true,
+        sent_by: {
+          member_id: sender.id,
+          display_name: senderName,
+          source: "mais_chat"
+        },
         ...(attachment
           ? {
               attachment: {
@@ -370,7 +411,7 @@ Deno.serve(async (req: Request) => {
       created_at: now
     })
     .select(
-      "id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url"
+      "id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url,sent_by:raw_payload->sent_by"
     )
     .single();
 
@@ -379,7 +420,7 @@ Deno.serve(async (req: Request) => {
       const { data: existing } = await client
         .from("messages")
         .select(
-          "id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url"
+          "id,direction,message_type,body,status,created_at,sent_at,delivered_at,read_at,reply_to_message_id,media_url,sent_by:raw_payload->sent_by"
         )
         .eq("organization_id", conversation.organization_id)
         .eq("whatsapp_message_id", whatsappMessageId)

@@ -1343,3 +1343,29 @@
  .appShell .chatMediaAudio { min-width: 180px; width: 100%; }
  .appShell .chatMediaImage { max-height: 220px; }
 }
+
+
+/* Attribution is internal to the team inbox; the business WhatsApp identity
+   stays unchanged and no signature is added to the customer's message. */
+.appShell .chatSenderName {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  margin: 0 0 6px;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 23%, var(--border));
+  border-radius: 999px;
+  color: var(--accent-strong);
+  background: var(--surface-soft);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.appShell .chatSenderName > span {
+  font-size: 7px;
+  line-height: 1;
+}
